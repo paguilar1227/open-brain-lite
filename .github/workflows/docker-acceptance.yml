@@ -1,0 +1,40 @@
+name: Docker acceptance
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  docker-acceptance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Start the documented Docker installation and verify real models
+        run: ./scripts/setup.sh
+      - name: Verify ingestion, OCR, search, consolidation, and containerized plugin
+        run: node scripts/verify-docker.mjs write
+      - name: Recreate the test containers while preserving named volumes
+        run: |
+          docker compose down
+          docker compose up -d --wait
+          docker compose exec -T app node scripts/verify-models.mjs
+      - name: Verify state and original files through a fresh plugin client
+        run: node scripts/verify-docker.mjs read
+      - name: Collect runtime diagnostics
+        if: always()
+        run: |
+          mkdir -p scratch
+          docker compose ps > scratch/docker-status.txt
+          docker compose logs --no-color > scratch/docker-runtime.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: docker-acceptance
+          path: |
+            scratch/docker-acceptance-receipt.json
+            scratch/docker-status.txt
+            scratch/docker-runtime.log
