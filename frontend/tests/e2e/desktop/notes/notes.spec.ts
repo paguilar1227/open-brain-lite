@@ -3,7 +3,8 @@
 // drives the unusual selectors here (.cm-content, theme wrapper class).
 import { expect, test } from '@playwright/test';
 import { findProjectByName, listContent } from '../../helpers/api';
-import { projectTo, stamp } from '../../helpers/setup';
+import { setup, projectTo, stamp } from '../../helpers/setup';
+setup();
 
 test('note flow: create a new note in a project via the editor modal', async ({ page }) => {
   const project = await findProjectByName('ClaudePit');

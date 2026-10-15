@@ -4,7 +4,8 @@
 // toggle flips status via the row checkbox.
 import { expect, test } from '@playwright/test';
 import { createTodo, deleteTodo, listTodos, updateTodo } from '../../helpers/api';
-import { stamp } from '../../helpers/setup';
+import { setup, stamp } from '../../helpers/setup';
+setup();
 import { waitForAppReady } from '../../helpers/utils';
 
 const TODOS_COL = '.home-personal-grid .pcol:has(h3:text-is("Todos"))';

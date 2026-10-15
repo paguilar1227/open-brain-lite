@@ -7,8 +7,8 @@
 // (.modal, not .drawer). The /activity page exposes entity_kind in the
 // row meta so we can pick a known-todo row deterministically.
 import { expect, test } from '@playwright/test';
-import { MORE_SHEET, openMoreSheet } from '../../helpers/setup';
-import '../../helpers/setup';
+import { setup, MORE_SHEET, openMoreSheet } from '../../helpers/setup';
+setup();
 
 test('drawer: covers the full viewport on mobile and hides the expand toggle', async ({ page }) => {
   await openMoreSheet(page);

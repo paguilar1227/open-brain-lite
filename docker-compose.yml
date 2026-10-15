@@ -14,7 +14,9 @@ services:
       timeout: 5s
       retries: 15
   ollama:
-    image: ollama/ollama:0.18.2
+    image: ollama/ollama:0.40.4
+    environment:
+      OLLAMA_NO_CLOUD: "1"
     volumes:
       - models:/root/.ollama
   app:

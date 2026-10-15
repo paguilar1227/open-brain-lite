@@ -3,7 +3,8 @@
 // on a throwaway project so it never touches the seed.
 import { expect, test } from '@playwright/test';
 import { createProject, findProjectByName } from '../../helpers/api';
-import { projectTo, stamp } from '../../helpers/setup';
+import { setup, projectTo, stamp } from '../../helpers/setup';
+setup();
 
 test('project ⋯ menu: edit, archive/restore, delete', async ({ page }) => {
   const name = stamp() + ' MenuTest';

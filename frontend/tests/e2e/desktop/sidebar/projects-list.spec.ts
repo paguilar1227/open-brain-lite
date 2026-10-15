@@ -4,7 +4,8 @@
 // REST and assert DOM order in the .sb-projects parent.
 import { expect, test } from '@playwright/test';
 import { createProject, listProjects, pinProject, unpinProject } from '../../helpers/api';
-import { SIDEBAR, stamp } from '../../helpers/setup';
+import { setup, SIDEBAR, stamp } from '../../helpers/setup';
+setup();
 import { waitForAppReady } from '../../helpers/utils';
 
 test('sidebar: pinning a project moves it into the Pinned section, unpinning removes it', async ({ page }) => {

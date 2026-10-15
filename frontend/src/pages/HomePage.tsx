@@ -615,7 +615,7 @@ export function HomePage({ onRoute, onAction, initialSearch }: Props) {
     <div className="page">
       <div className="proj-hero">
         <div>
-          <h1>Welcome back, Pablo.</h1>
+          <h1>Welcome back.</h1>
         </div>
         <button className="btn btn-primary" onClick={() => onRoute({ route: 'projects', action: 'new' })}>
           <Icons.Plus /> New project

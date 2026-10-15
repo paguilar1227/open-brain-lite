@@ -4,9 +4,9 @@
 // REST + reload (React Query staleTime would otherwise mask them).
 import { expect, test } from '@playwright/test';
 import { createProject, pinProject, unpinProject } from '../../helpers/api';
-import { MORE_SHEET, openMoreSheet, stamp } from '../../helpers/setup';
+import { setup, MORE_SHEET, openMoreSheet, stamp } from '../../helpers/setup';
+setup();
 import { waitForAppReady } from '../../helpers/utils';
-import '../../helpers/setup';
 
 const PIN_COUNTER = `${MORE_SHEET} .m-sheet-section:has-text("Pinned") .ct`;
 

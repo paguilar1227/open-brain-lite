@@ -29,6 +29,7 @@ frontend/playwright/.cache/
 frontend/tsconfig.tsbuildinfo
 /test-results/
 .playwright-mcp/
+.playwright-cli/
 
 # Working scratch — screenshots, prototypes, throwaway notes.
 # Anything that should not be committed long-term goes here.

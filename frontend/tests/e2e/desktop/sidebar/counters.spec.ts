@@ -5,7 +5,8 @@
 // the counter restores. Delta-based so we don't hard-code seed counts.
 import { expect, test } from '@playwright/test';
 import { createProject, createTodo, deleteProject, deleteTodo } from '../../helpers/api';
-import { SIDEBAR, stamp } from '../../helpers/setup';
+import { setup, SIDEBAR, stamp } from '../../helpers/setup';
+setup();
 import { waitForAppReady } from '../../helpers/utils';
 
 const SB_ITEM = (label: string) =>

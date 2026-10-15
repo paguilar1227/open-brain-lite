@@ -54,6 +54,7 @@ COPY --from=builder /app/frontend/dist ./frontend/dist
 COPY migrations/ ./backend/migrations/
 COPY backend/python/ ./backend/python/
 COPY plugin/ ./plugin/
+COPY scripts/verify-models.mjs ./scripts/verify-models.mjs
 
 EXPOSE 3000
 ENV NODE_ENV=production

@@ -18,7 +18,7 @@
     "build:all": "npm run build:shared && npm run build:backend && npm run build:frontend",
     "dev:frontend": "npm run dev --workspace=open-brain-frontend",
     "dev:backend": "npm run dev --workspace=open-brain-backend",
-    "test:e2e": "npm run test:e2e --workspace=open-brain-frontend"
+    "test:e2e": "npm run test:e2e --workspace=open-brain-frontend --"
   },
   "devDependencies": {
     "concurrently": "^9.2.1",

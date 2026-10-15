@@ -18,8 +18,8 @@
 //     navigates to the project view.
 //   - PDF preview → an Expand chip opens a fullscreen lightbox.
 import { expect, test } from '@playwright/test';
-import '../../helpers/setup';
-import { navTo } from '../../helpers/setup';
+import { setup, navTo } from '../../helpers/setup';
+setup();
 
 async function openDocFromActivity(page: import('@playwright/test').Page, title: string) {
   await navTo(page, 'Activity');

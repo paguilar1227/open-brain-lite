@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
-import { projectTo } from '../../helpers/setup';
+import { setup, projectTo } from '../../helpers/setup';
+setup();
 
 test('document flow: open Add modal, queue a URL, see it stay in the queue', async ({ page }) => {
   await projectTo(page, 'ClaudePit');

@@ -10,4 +10,5 @@ embedding_model=$(docker compose exec -T app printenv EMBEDDING_MODEL)
 docker compose exec -T ollama ollama pull "$embedding_model"
 local_model=$(docker compose exec -T app printenv LOCAL_MODEL)
 docker compose exec -T ollama ollama pull "$local_model"
+docker compose exec -T app node scripts/verify-models.mjs
 printf '\nOpen Brain Lite is ready on the configured host and port (default 3210).\nYour API key is in .env. Data persists in Docker volumes.\n'

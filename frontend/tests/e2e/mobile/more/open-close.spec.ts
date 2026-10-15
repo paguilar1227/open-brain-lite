@@ -3,8 +3,8 @@
 // dimming overlay outside the sheet (the visual is a slide-down).
 // Drag-to-dismiss isn't wired yet; if/when it is, add a test here.
 import { expect, test } from '@playwright/test';
-import { MORE_SHEET, openMoreSheet } from '../../helpers/setup';
-import '../../helpers/setup';
+import { setup, MORE_SHEET, openMoreSheet } from '../../helpers/setup';
+setup();
 
 test('mobile more: clicking the X button in the sheet header dismisses it', async ({ page }) => {
   await openMoreSheet(page);

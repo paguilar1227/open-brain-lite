@@ -1,11 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
-const FRONTEND_PORT = 5173;
-const BACKEND_PORT = 3001;
 const FRONTEND_URL = `http://127.0.0.1:3210`;
-const BACKEND_HEALTH = `http://localhost:${BACKEND_PORT}/health`;
 const BASE_URL = process.env.BASE_URL || FRONTEND_URL;
-const isLocal = BASE_URL.startsWith('http://localhost') || BASE_URL.startsWith('http://127.0.0.1');
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -30,6 +26,9 @@ export default defineConfig({
 
   use: {
     baseURL: BASE_URL,
+    // Full Chromium also exercises persistent notifications; headless-shell
+    // denies Notification.permission even when permission is granted by CDP.
+    channel: 'chromium',
     trace: 'on-first-retry',
     video: 'retain-on-failure',
     screenshot: 'only-on-failure',

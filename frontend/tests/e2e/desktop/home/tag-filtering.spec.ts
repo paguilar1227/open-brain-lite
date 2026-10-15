@@ -12,7 +12,8 @@ import {
   listContent,
   listTodos,
 } from '../../helpers/api';
-import { stamp } from '../../helpers/setup';
+import { setup, stamp } from '../../helpers/setup';
+setup();
 import { waitForAppReady } from '../../helpers/utils';
 
 // Per-run tag namespace so parallel/sequential specs can't bleed into

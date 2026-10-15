@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
-import { navTo } from '../../helpers/setup';
+import { setup, navTo } from '../../helpers/setup';
+setup();
 
 test('activity: feed renders entries from the seed', async ({ page }) => {
   await navTo(page, 'Activity');

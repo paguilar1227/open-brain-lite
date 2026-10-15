@@ -6,7 +6,7 @@ Projects keep their todos, notes, documents, search, and MCP tools. Session hand
 
 ## Run
 
-Requirements: Docker with Compose. The setup script downloads the local model weights; after that the default path needs no cloud model account.
+Requirements: Docker with Compose. The setup script downloads the local model weights and checks real embeddings and structured completion before reporting ready; after that the default path needs no cloud model account.
 
 ```sh
 gh repo clone paguilar1227/open-brain-lite
@@ -26,12 +26,12 @@ Do not remove Docker volumes unless you intend to erase the installation. Back u
 ## Models
 
 - **Default embedding:** Ollama `embeddinggemma`, 768 dimensions. A small [300M-parameter retrieval model](https://ollama.com/library/embeddinggemma) suited to a personal corpus.
-- **Default completion/consolidation:** Ollama `qwen3.5:4b`, with thinking disabled for structured extraction and ordinary retrieval. [Qwen 3.5](https://ollama.com/library/qwen3.5) is a current small multimodal model; the 4B weight download is approximately 3.3–4.0 GB. The default works on CPU; native Ollama can also be selected with `OLLAMA_URL` for hardware acceleration.
+- **Default completion/consolidation:** Ollama `qwen3.5:4b`, with thinking disabled for structured extraction and ordinary retrieval. [Qwen 3.5](https://ollama.com/library/qwen3.5) is a small multimodal model; the 4B weight download is approximately 3.3–4.0 GB. Compose pins Ollama `0.40.4` and disables its cloud execution. Older runtimes can reject this model. Native Ollama can also be selected with `OLLAMA_URL` for hardware acceleration; Docker CPU performance remains to be measured.
 - **llama.cpp:** Select Local · llama.cpp in Settings and provide your local OpenAI-compatible server endpoint and loaded model. Ollama still supplies embeddings.
 - **Optional completion:** GitHub Copilot or ChatGPT via their official SDKs. Use Settings to start device sign-in, select a provider/model, and save. Credentials are isolated in this installation; host CLI accounts are not mounted.
 - Embeddings always remain local when using subscription completion. The selected completion provider receives the relevant prompt and retrieved project content. No silent provider fallback.
 
-Changing the embedding model requires reindexing with matching dimensions; do not reuse vectors from a different embedding model. Model defaults are provisional until measured on the real local workload.
+Changing the embedding model requires reindexing with matching dimensions; do not reuse vectors from a different embedding model. These defaults passed a native Apple M1 Pro workload: real ingestion, global/project retrieval, structured extraction, and a source-cited handoff retrieved by a new MCP client. This is a practical default, not a claim of universal benchmark leadership.
 
 ## Agent plugin
 
@@ -71,4 +71,15 @@ npm run test:frontend
 
 Provider tests use mocks and require no real account keys. The local-database tests execute the migrations, pgvector searches, rollback behavior, and disk reopen against embedded PostgreSQL (PGlite); Docker acceptance remains a separate check. Production builds run the real configured local provider; stub mode is only for tests or explicit UI development.
 
-Current work remains in progress: real Docker/model/mobile validation, completion-provider sign-in verification, local media/URL extraction verification, and the final independent acceptance pass. Do not treat passing mock-based tests as proof of those integrations.
+Browser regression checks run against an explicitly started, isolated installation:
+
+```sh
+npm run test:e2e:install --workspace=open-brain-frontend
+OPEN_BRAIN_API_KEY=your-test-installation-key npm run test:e2e -- 'lite-contract|settings'
+```
+
+The checks create and clean up their own records. The memory cases require a local completion provider. The remaining inherited v2 browser suite requires its original seed fixtures; it is not evidence of Lite acceptance by itself.
+
+Verified so far: build, 325 backend tests, 81 frontend tests, and 11 desktop/mobile browser checks (one inherited Help placeholder is explicitly skipped). A separate read-only review confirmed the browser scope. Real native Ollama + MCP checks covered ingestion, global/project search, idempotent session saving, consolidation, and retrieval by a fresh client. In the small acceptance corpus, search took 73–216 ms and consolidation took 36 seconds on an Apple M1 Pro; these are observations, not service guarantees.
+
+Current work remains in progress: the complete Docker startup/restart path is blocked by local Docker disk space. Subscription-provider sign-in, local media/URL extraction, physical-phone HTTPS notifications, and final full acceptance remain unverified. Native model checks and browser tests do not substitute for those integrations.

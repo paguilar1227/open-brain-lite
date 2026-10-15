@@ -3,7 +3,8 @@
 // this, the widget is a fancy read-only list. The test walks: Home → click
 // the first activity row → assert a modal dialog opens.
 import { expect, test } from '@playwright/test';
-import '../../helpers/setup';
+import { setup } from '../../helpers/setup';
+setup();
 
 test('home activity: clicking a row opens the underlying entity modal', async ({ page }) => {
   // Wait for the activity card to finish loading — its rows render after

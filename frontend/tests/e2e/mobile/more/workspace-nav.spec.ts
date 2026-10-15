@@ -3,8 +3,8 @@
 // keeps the suite tight (one More-open per row would re-open the sheet
 // after every tap, since `go` closes it on selection).
 import { expect, test } from '@playwright/test';
-import { MORE_SHEET, openMoreSheet } from '../../helpers/setup';
-import '../../helpers/setup';
+import { setup, MORE_SHEET, openMoreSheet } from '../../helpers/setup';
+setup();
 
 test('mobile more: every Workspace row routes to the right page', async ({ page }) => {
   const rows: Array<[string, RegExp]> = [

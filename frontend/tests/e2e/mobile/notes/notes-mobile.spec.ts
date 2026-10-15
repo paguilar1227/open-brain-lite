@@ -4,8 +4,8 @@
 //
 // Pinned against the deterministic seed: travel(4); cooking → coffee(3).
 import { expect, test, type Page } from '@playwright/test';
-import { MORE_SHEET, openMoreSheet } from '../../helpers/setup';
-import '../../helpers/setup';
+import { setup, MORE_SHEET, openMoreSheet } from '../../helpers/setup';
+setup();
 
 async function openNotesMobile(page: Page) {
   await openMoreSheet(page);

@@ -51,27 +51,14 @@ export async function reloadAndWait(page: Page) {
   await page.locator('.app').waitFor({ state: 'visible' });
 }
 
-/** Wait for the SPA to be ready (root mounted, sidebar OR mobile tabbar visible,
- *  AND the projects React Query has resolved — meaning the .sb-projects list
- *  has at least one row). The data wait is what makes this reliable: every test
- *  in the suite eventually clicks something keyed off the seed data, and the
- *  shell can mount well before that data arrives.
- */
+/** Wait for the app shell. Individual tests wait for their own data; a new
+ *  installation with no projects is a valid workspace, too. */
 export async function waitForAppReady(page: Page) {
   await page.locator('.app').waitFor({ state: 'visible' });
   await page
     .locator('aside.sidebar, nav.mobile-tabbar')
     .first()
     .waitFor({ state: 'visible' });
-  // Desktop: wait for the projects list to populate. Mobile: there's no
-  // sidebar projects list, so just wait for the tabbar to be interactive.
-  const v = page.viewportSize();
-  if (v && v.width >= 820) {
-    await page
-      .locator('aside.sidebar .sb-projects .sb-item:not(.dim)')
-      .first()
-      .waitFor({ state: 'visible', timeout: 15_000 });
-  }
 }
 
 /** True when the current viewport is below the mobile breakpoint used by the app (820). */

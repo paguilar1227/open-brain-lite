@@ -14,7 +14,8 @@
 // run against the same fixture used by humans clicking around.
 
 import { expect, test } from '@playwright/test';
-import '../../helpers/setup';
+import { setup } from '../../helpers/setup';
+setup();
 
 const todosCol = (page: import('@playwright/test').Page) =>
   page.locator('.home-personal-grid .pcol').filter({ has: page.locator('h3:text-is("Todos")') });

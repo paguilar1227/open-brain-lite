@@ -12,7 +12,8 @@
 
 import { expect, test } from '@playwright/test';
 import { createTodo, listTodos } from '../../helpers/api';
-import { stamp } from '../../helpers/setup';
+import { setup, stamp } from '../../helpers/setup';
+setup();
 import { waitForAppReady } from '../../helpers/utils';
 
 const TODOS_COL = '.home-personal-grid .pcol:has(h3:text-is("Todos"))';

@@ -3,7 +3,8 @@
 // the current page so dismissing it returns the user to where they were
 // rather than replacing the route.
 import { expect, test } from '@playwright/test';
-import '../../helpers/setup';
+import { setup } from '../../helpers/setup';
+setup();
 
 test('settings desktop: clicking sidebar footer opens the modal and X dismisses it', async ({ page }) => {
   await page.locator('aside.sidebar .sb-footer').click();
@@ -29,18 +30,14 @@ test('settings desktop: theme toggle inside the modal flips the document data-th
   await expect.poll(() => page.evaluate(() => document.documentElement.dataset.theme)).toBe(initial);
 });
 
-test('settings desktop: clicking Log out clears the cached token and redirects', async ({ page }) => {
-  // Plant a sentinel token so we can prove the logout call cleared it. In
-  // local dev /.auth/logout doesn't exist; the dev branch of logout()
-  // assigns '/' and bootAuth re-hydrates from the env-var fallback.
+test('settings desktop: locking the workspace clears the key and returns to local sign-in', async ({ page }) => {
   await page.evaluate(() => localStorage.setItem('ob.api_key', 'sentinel-to-clear'));
 
   await page.locator('aside.sidebar .sb-footer').click();
   await expect(page.locator('.modal-head h3', { hasText: 'Settings' })).toBeVisible();
-  await page.locator('.modal').getByRole('button', { name: 'Log out' }).click();
+  await page.locator('.modal').getByRole('button', { name: 'Lock workspace' }).click();
 
-  // Wait for the post-logout reload + bootAuth to settle on the home view.
-  await expect(page.locator('h1', { hasText: /Welcome back/ })).toBeVisible();
+  await expect(page.getByLabel('Installation API key')).toBeVisible();
   const stored = await page.evaluate(() => localStorage.getItem('ob.api_key'));
   expect(stored).toBeNull();
 });

@@ -8,7 +8,8 @@
 // MAX_ROWS=6 regardless of viewport. The seed has >6 personal notes and >6
 // personal docs, so both exercise the cap.
 import { expect, test } from '@playwright/test';
-import '../../helpers/setup';
+import { setup } from '../../helpers/setup';
+setup();
 
 const CAP = 6;
 

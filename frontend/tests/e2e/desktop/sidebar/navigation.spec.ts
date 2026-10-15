@@ -1,7 +1,8 @@
 // Sidebar navigation: collapse/expand toggle, every Workspace nav row,
 // and clicking a pinned project from the sidebar.
 import { expect, test } from '@playwright/test';
-import { SIDEBAR, navTo, projectTo } from '../../helpers/setup';
+import { setup, SIDEBAR, navTo, projectTo } from '../../helpers/setup';
+setup();
 
 test('sidebar: clicking a pinned project navigates to its detail page', async ({ page }) => {
   await projectTo(page, 'ClaudePit');

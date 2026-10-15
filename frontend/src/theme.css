@@ -23,3 +23,5 @@
 .memory-panel { padding: 20px 0; overflow-wrap: anywhere; }
 .memory-panel h2 { flex: 1; }
 @media (max-width: 600px) { .memory-panel .row-flex { align-items: flex-start; flex-direction: column; } .settings-row { flex-wrap: wrap; } }
+.app[data-mobile="true"] .proj-hero { flex-direction: column; gap: 12px; }
+.app[data-mobile="true"] .proj-hero > div:first-child { width: 100%; min-width: 0; }

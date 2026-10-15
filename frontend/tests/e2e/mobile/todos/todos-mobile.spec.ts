@@ -3,8 +3,8 @@
 // desktop title + priority share one row; on mobile the priority is on a lower
 // row. Pins the reflow that stopped titles truncating + chips wrapping.
 import { expect, test } from '@playwright/test';
-import { MORE_SHEET, openMoreSheet } from '../../helpers/setup';
-import '../../helpers/setup';
+import { setup, MORE_SHEET, openMoreSheet } from '../../helpers/setup';
+setup();
 
 test('mobile todos: priority sits on a row below the title (reflow)', async ({ page }) => {
   await openMoreSheet(page);

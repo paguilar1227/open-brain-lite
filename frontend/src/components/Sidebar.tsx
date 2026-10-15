@@ -39,7 +39,7 @@ export function Sidebar({ route, onRoute, onAction, collapsed, onToggleCollapsed
           </svg>
         </div>
         <div className="name">Open Brain</div>
-        <div className="ver">2.5</div>
+        <div className="ver">Lite</div>
         <button
           className="sb-collapse"
           title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
@@ -121,10 +121,10 @@ export function Sidebar({ route, onRoute, onAction, collapsed, onToggleCollapsed
         title="Settings"
         aria-label="Settings"
       >
-        <span className="sb-avatar">P</span>
+        <span className="sb-avatar">OB</span>
         <span className="sb-user">
-          <span className="nm">Pablo</span>
-          <span className="em">pablo.aguilar1227@gmail.com</span>
+          <span className="nm">Local workspace</span>
+          <span className="em">Stored on this machine</span>
         </span>
         <span className="sb-cog" aria-hidden="true">
           <Icons.Cog />

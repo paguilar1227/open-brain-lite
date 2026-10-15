@@ -3,7 +3,8 @@
 // is below the 820 mobile breakpoint that swaps the sidebar for the
 // tabbar). Same modal, same backend, different reach.
 import { expect, test } from '@playwright/test';
-import '../../helpers/setup';
+import { setup } from '../../helpers/setup';
+setup();
 
 test('settings mobile: More → Account & preferences opens the modal and X dismisses it', async ({ page }) => {
   // The mobile tabbar swaps in below 820px (see useIsMobile). Wait for it
@@ -38,7 +39,7 @@ test('settings mobile: theme toggle inside the modal flips the document data-the
   await expect.poll(() => page.evaluate(() => document.documentElement.dataset.theme)).toBe(initial);
 });
 
-test('settings mobile: clicking Log out clears the cached token and redirects', async ({ page }) => {
+test('settings mobile: locking the workspace clears the key and returns to local sign-in', async ({ page }) => {
   await page.evaluate(() => localStorage.setItem('ob.api_key', 'sentinel-to-clear'));
 
   const more = page.locator('.mobile-tabbar .mtab', { hasText: 'More' });
@@ -46,26 +47,23 @@ test('settings mobile: clicking Log out clears the cached token and redirects', 
   await more.click();
   await page.locator('.m-sheet .m-sheet-row', { hasText: 'Account & preferences' }).click();
   await expect(page.locator('.modal-head h3', { hasText: 'Settings' })).toBeVisible();
-  await page.locator('.modal').getByRole('button', { name: 'Log out' }).click();
+  await page.locator('.modal').getByRole('button', { name: 'Lock workspace' }).click();
 
-  await expect(page.locator('h1', { hasText: /Welcome back/ })).toBeVisible();
+  await expect(page.getByLabel('Installation API key')).toBeVisible();
   const stored = await page.evaluate(() => localStorage.getItem('ob.api_key'));
   expect(stored).toBeNull();
 });
 
-// The next two tests pin TODO features. `test.fail` flips the test green
-// when the feature actually lands — until then, the suite tracks them as
-// expected-failures and they're visible in every report rather than
-// silently skipped. Replace `test.fail` with `test` once wired.
-test.fail('settings mobile: tapping Notifications routes to the Notifications view', async ({ page }) => {
+test('settings mobile: tapping Notifications opens browser reminder settings', async ({ page }) => {
   const more = page.locator('.mobile-tabbar .mtab', { hasText: 'More' });
   await expect(more).toBeVisible();
   await more.click();
   await page.locator('.m-sheet .m-sheet-row', { hasText: 'Notifications' }).click();
-  await expect(page.locator('main h1', { hasText: /Notifications/ })).toBeVisible();
+  await expect(page.locator('.modal').getByRole('heading', { name: 'Browser notifications' })).toBeVisible();
+  await expect(page.locator('.modal').getByRole('button', { name: 'Enable reminders' })).toBeVisible();
 });
 
-test.fail('settings mobile: tapping Help & shortcuts routes to the Help view', async ({ page }) => {
+test.fixme('settings mobile: tapping Help & shortcuts routes to the Help view', async ({ page }) => {
   const more = page.locator('.mobile-tabbar .mtab', { hasText: 'More' });
   await expect(more).toBeVisible();
   await more.click();

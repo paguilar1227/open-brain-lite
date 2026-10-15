@@ -15,7 +15,8 @@
 // (Postgres + Azurite + LLM_PROVIDER=stub) — no mocked plumbing.
 
 import { expect, test, type Page } from '@playwright/test';
-import '../../helpers/setup';
+import { setup } from '../../helpers/setup';
+setup();
 
 // ---- Seed-data contract (kept in sync with scripts/seed-local.ts) ---------
 // Update these constants when the seed changes; do NOT inline counts.

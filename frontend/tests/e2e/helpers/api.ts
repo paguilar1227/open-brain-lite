@@ -5,15 +5,19 @@
 // Mirrors a slice of frontend/src/lib/api.ts but uses Node fetch and accepts
 // the loose JSON shapes returned by the backend (we don't run Zod here).
 
-const BASE = process.env.OPEN_BRAIN_BASE_URL ?? 'http://localhost:3001';
-const KEY = process.env.OPEN_BRAIN_API_KEY ?? 'local-dev-key-not-secret';
+const BASE = process.env.OPEN_BRAIN_BASE_URL ?? process.env.BASE_URL ?? 'http://127.0.0.1:3210';
+export function installationKey(): string {
+  const key = process.env.OPEN_BRAIN_API_KEY;
+  if (!key) throw new Error('Set OPEN_BRAIN_API_KEY for the isolated Lite installation under test.');
+  return key;
+}
 
-async function api<T = unknown>(method: string, path: string, body?: unknown): Promise<T> {
+export async function api<T = unknown>(method: string, path: string, body?: unknown): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     method,
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${KEY}`,
+      Authorization: `Bearer ${installationKey()}`,
     },
     body: body ? JSON.stringify(body) : undefined,
   });
@@ -143,7 +147,7 @@ export async function createDoc(
   form.append('file', new Blob([content], { type: 'text/plain' }), `${title}.txt`);
   const res = await fetch(`${BASE}/api/v1/content`, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${KEY}` },
+    headers: { Authorization: `Bearer ${installationKey()}` },
     body: form,
   });
   const text = await res.text();

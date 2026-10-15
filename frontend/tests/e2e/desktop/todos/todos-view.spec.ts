@@ -7,7 +7,8 @@
 // (helpers/setup) hard-deletes them — the seed is never corrupted.
 
 import { expect, test, type Page } from '@playwright/test';
-import { stamp } from '../../helpers/setup';
+import { setup, stamp } from '../../helpers/setup';
+setup();
 import { createTodo } from '../../helpers/api';
 
 async function openTodos(page: Page) {
