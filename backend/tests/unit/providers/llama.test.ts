@@ -8,6 +8,7 @@ describe('llama.cpp completion adapter', () => {
     const fetcher = vi.mocked(postLocalJson).mockResolvedValue({ choices: [{ message: { content: 'Local answer' } }], usage: { prompt_tokens: 3, completion_tokens: 2, total_tokens: 5 } });
     const response = await new LlamaCppProvider('http://llama:8080/v1', 'local-model').complete([{ role: 'user', content: 'Summarize' }]);
     expect(fetcher.mock.calls[0][0]).toBe('http://llama:8080/v1/chat/completions');
+    expect(fetcher.mock.calls[0][1]).toMatchObject({ reasoning_effort: 'none' });
     expect(response).toMatchObject({ content: 'Local answer', tokensUsed: { total: 5 } });
   });
   it('propagates local runtime failure instead of pretending the call succeeded', async () => {

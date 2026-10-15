@@ -120,6 +120,8 @@ if (phase === 'write') {
   assert(sources.some(id => memory.summary.includes(id)), 'Handoff must cite its supplied source records');
   assert.match(memory.summary, /restart/i, 'Handoff must retain the pending restart verification');
   assert.match(memory.summary, /volume|PostgreSQL/i, 'Handoff must retain the storage decision');
+  assert.doesNotMatch(memory.summary, /\b3,?072[\s*-]*(?:dimension|dimensional)|Gemini Embedding|text-embedding-3-large/i,
+    'Reference PDF settings must not become current project architecture');
   receipt.savedModelSettings = { provider: runtime.provider, localModel: runtime.localModel,
     llamaUrl: runtime.llamaUrl, llamaModel: 'docker-acceptance-unused-model',
     copilotModel: runtime.copilotModel, chatgptModel: runtime.chatgptModel };

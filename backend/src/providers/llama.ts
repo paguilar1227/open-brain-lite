@@ -5,7 +5,7 @@ export class LlamaCppProvider implements LLMProvider {
   constructor(private baseUrl: string, private model: string) {}
   async complete(messages: LLMMessage[], options: LLMOptions = {}): Promise<LLMResponse> {
     const result = await postLocalJson(`${this.baseUrl.replace(/\/$/, '')}/chat/completions`, {
-        model: this.model, stream: false, temperature: 0,
+        model: this.model, stream: false, temperature: 0, reasoning_effort: 'none',
         messages: [...(options.systemPrompt ? [{ role: 'system', content: options.systemPrompt }] : []), ...messages.map(message => ({ role: message.role,
           content: typeof message.content === 'string' ? message.content : message.content.map(part => part.type === 'text' ? { type: 'text', text: part.text } : { type: 'image_url', image_url: { url: `data:${part.mimeType};base64,${part.data?.toString('base64')}` } }) }))],
         ...(options.responseFormat === 'json' ? { response_format: { type: 'json_object' } } : {}),

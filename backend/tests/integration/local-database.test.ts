@@ -119,6 +119,25 @@ describe('local PostgreSQL and durable project contract', () => {
     expect(note.rows[0].content).toBe(saved.summary);
   });
 
+  it('separates project notes from reference documents during consolidation', async () => {
+    const project = await createProject(deps, 'Current project', 'Local project state, not the example system in the reference.');
+    const note = await content.createContentItem(deps, { type: 'note', title: 'Current storage decision',
+      content: 'For this project, keep state in PostgreSQL and documents in Docker volumes.', projectIds: [project.id] });
+    const reference = await content.createContentItem(deps, { type: 'document', title: 'Older system reference',
+      content: 'An unrelated example system uses Gemini 3072-dimensional embeddings.', projectIds: [project.id] });
+    await Promise.all([note.completion, reference.completion]);
+    const complete = vi.fn().mockResolvedValue({ content: 'Current project handoff.', tokensUsed: { input: 1, output: 1, total: 2 } });
+    const memory = await consolidateProject({ ...deps, ragFastLLM: { complete } }, project.id);
+    const evidence = JSON.parse(complete.mock.calls[0][0][0].content);
+    expect(evidence.project_notes.map((row: { id: string }) => row.id)).toEqual([note.id]);
+    expect(JSON.stringify(evidence)).not.toContain('3072-dimensional');
+    expect(memory.summary).toContain('Older system reference');
+    expect(memory.summary).toContain(reference.id);
+    expect(memory.summary).not.toContain('3072-dimensional');
+    expect(memory.source_ids).toEqual(expect.arrayContaining([note.id, reference.id]));
+    expect(complete.mock.calls[0][1].systemPrompt).toContain('not automatically facts about this project');
+  });
+
   it('returns a consolidation job while the model is pending, deduplicates starts, and retains prior memory', async () => {
     const project = await createProject(deps, 'Slow CPU handoff', null);
     const previous = await consolidateProject(deps, project.id);
