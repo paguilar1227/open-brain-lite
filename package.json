@@ -1,0 +1,41 @@
+{
+  "name": "open-brain-lite",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "shared",
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "start": "bash scripts/setup.sh",
+    "stop": "docker compose stop",
+    "test": "npm test --workspace=open-brain-backend",
+    "test:frontend": "npm test --workspace=open-brain-frontend",
+    "build:shared": "npm run build --workspace=@open-brain/shared",
+    "build:backend": "npm run build --workspace=open-brain-backend",
+    "build:frontend": "npm run build --workspace=open-brain-frontend",
+    "build:all": "npm run build:shared && npm run build:backend && npm run build:frontend",
+    "dev:frontend": "npm run dev --workspace=open-brain-frontend",
+    "dev:backend": "npm run dev --workspace=open-brain-backend",
+    "test:e2e": "npm run test:e2e --workspace=open-brain-frontend"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "lefthook": "^2.1.9",
+    "wait-on": "^9.0.5"
+  },
+  "comment:overrides": "Pin patched versions of transitive CVE deps whose parents (firecrawl-js, @modelcontextprotocol/sdk, @azure/*, ajv, wait-on) haven't shipped the fix yet. Exact versions (no caret) so npm forces nested/exact pins. All within-major. Drop an entry once its parent upgrades past the advisory. See CI.md.",
+  "overrides": {
+    "axios": "1.18.0",
+    "@grpc/grpc-js": "1.14.4",
+    "fast-uri": "3.1.2",
+    "shell-quote": "1.8.4",
+    "fast-xml-builder": "1.2.0",
+    "express-rate-limit": "8.5.2",
+    "qs": "6.15.2",
+    "ip-address": "10.2.0",
+    "joi": "18.2.1",
+    "esbuild": "0.28.1"
+  }
+}

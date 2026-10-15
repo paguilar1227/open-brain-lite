@@ -1,0 +1,53 @@
+import { spawn, type ChildProcess } from 'node:child_process';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { mkdir } from 'node:fs/promises';
+import type { Config } from '../config.js';
+type Provider = 'copilot' | 'chatgpt';
+type LoginState = { status: 'running' | 'succeeded' | 'failed'; url?: string; code?: string; message?: string; child?: ChildProcess };
+export class ProviderLogin {
+  private states = new Map<Provider, LoginState>();
+  constructor(private config: Config) {}
+  status(provider: Provider) {
+    const { child, ...publicState } = this.states.get(provider) ?? { status: 'failed' as const, message: 'Not signed in through this app yet.' };
+    return publicState;
+  }
+  async start(provider: Provider) {
+    if (this.states.get(provider)?.status === 'running') return this.status(provider);
+    await mkdir(this.config.authDir, { recursive: true });
+    let command: string;
+    let args: string[];
+    if (provider === 'chatgpt') {
+      command = process.execPath;
+      const entry = fileURLToPath(import.meta.resolve('@openai/codex-sdk'));
+      const cli = join(dirname(entry), '../../codex/bin/codex.js');
+      args = [cli, 'login', '--device-auth'];
+    } else {
+      // Runtime API is pinned with the SDK dependency. No global CLI/auth state is used.
+      const entry = import.meta.resolve('@github/copilot-sdk');
+      const runtime = await import(new URL('./runtimeArtifacts.js', entry).href);
+      command = await runtime.ensureRuntimeBundle('1.0.98');
+      args = ['login', '--device-code'];
+    }
+    const env: NodeJS.ProcessEnv = { ...process.env, CODEX_HOME: join(this.config.authDir, 'codex'), COPILOT_HOME: join(this.config.authDir, 'copilot') };
+    delete env.OPENAI_API_KEY;
+    delete env.GITHUB_TOKEN;
+    delete env.GH_TOKEN;
+    delete env.COPILOT_GITHUB_TOKEN;
+    const child = spawn(command, args, { env, stdio: ['ignore', 'pipe', 'pipe'] });
+    const state: LoginState = { status: 'running', child };
+    this.states.set(provider, state);
+    let output = '';
+    const collect = (data: Buffer) => {
+      output += data.toString().replace(/\x1b\[[0-9;]*m/g, '');
+      // Return only device authorization coordinates, never raw CLI output or credentials.
+      state.url = output.match(/https:\/\/(?:auth\.openai\.com|github\.com)\/[^\s\x1b]+/)?.[0];
+      state.code = output.match(/\b[A-Z0-9]{4,5}-[A-Z0-9]{4,5}\b/)?.[0];
+    };
+    child.stdout?.on('data', collect);
+    child.stderr?.on('data', collect);
+    child.on('error', () => { state.status = 'failed'; state.message = 'Sign-in could not start. Check the container logs and CLI installation.'; });
+    child.on('exit', code => { state.status = code === 0 ? 'succeeded' : 'failed'; state.message = code === 0 ? 'Signed in. Select this provider and save.' : 'Sign-in did not finish. Try again or check device-login access for your account.'; state.child = undefined; });
+    return this.status(provider);
+  }
+}

@@ -1,0 +1,25 @@
+/* Theme seam: future Refero directions can override these semantic tokens without rewriting components. */
+:root {
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --bg: #141a1c; --bg-deep: #101517; --fg: #edf1ee; --fg-muted: #b4c1bc; --fg-subtle: #91a19a;
+  --accent-1: #6dbda2; --accent-2: #6dbda2; --accent-3: #afd1a8;
+  --accent-grad: linear-gradient(120deg, #548d78, #76ab8c); --accent-soft: #6dbda225;
+  --glass-bg: #1b2326; --glass-bg-strong: #202b2e; --glass-bg-soft: #ffffff06;
+  --glass-blur: 0px; --glass-sat: 100%; --shadow-card: none; --shadow-pop: 0 16px 48px #0005;
+  --type-body: 14px; --type-meta: 12px; --fs-body: 14px;
+}
+[data-theme="light"] { --bg: #f3f5f0; --bg-deep: #e7ede4; --fg: #24362e; --fg-muted: #50685a; --fg-subtle: #67766c;
+  --glass-bg: #ffffff; --glass-bg-strong: #ffffff; --glass-bg-soft: #f2f6ef; --glass-bg-elev: #f8fbf5;
+  --accent-1: #37795f; --accent-2: #37795f; --accent-3: #5b9278; --accent-soft: #37795f15;
+  --shadow-card: none; --shadow-pop: 0 16px 48px #273c2918; }
+.backdrop::before,.backdrop::after,.backdrop .blob,.grain { display: none; }
+.login-card { width: min(420px, calc(100% - 32px)); margin: 12vh auto; padding: 28px; border: 1px solid var(--glass-border); border-radius: 18px; background: var(--glass-bg); }
+.login-card form { display: grid; gap: 12px; margin: 28px 0; }
+.login-card input { padding: 12px; background: var(--field-bg); border: 1px solid var(--glass-border-strong); border-radius: 8px; }
+.settings-model-form { display: grid; gap: 12px; margin: 16px 0; }
+.settings-model-form label { display: grid; gap: 6px; }
+.settings-model-form input,.settings-model-form select { width: 100%; padding: 10px; color: var(--fg); background: var(--field-bg); border: 1px solid var(--glass-border-strong); border-radius: 8px; }
+.provider-login { margin-top: 16px; }
+.memory-panel { padding: 20px 0; overflow-wrap: anywhere; }
+.memory-panel h2 { flex: 1; }
+@media (max-width: 600px) { .memory-panel .row-flex { align-items: flex-start; flex-direction: column; } .settings-row { flex-wrap: wrap; } }

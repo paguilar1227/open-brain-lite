@@ -1,0 +1,40 @@
+node_modules/
+dist/
+# Ad-hoc screenshots saved at repo root by Playwright probes during UI
+# verification. Throwaway visual checks, not documentation. Tracked
+# screenshots under e.g. docs/screenshots/ are unaffected.
+/*.png
+.env
+.env.local
+*.log
+coverage/
+.DS_Store
+# superdev flow state — per-feature design plans, TDD lists, evidence,
+# codex scratch. Per-machine, not part of source history.
+.superdev/
+# .claude/ holds a mix of local-only stuff (logs, personal settings) and
+# committed shared rules. Ignore everything by default, then carve out the
+# pieces that should be versioned.
+.claude/*
+!.claude/rules/
+!.claude/rules/**
+tmp.md
+tests/fixtures/e2e/.venv/
+# Playwright
+frontend/test-results/
+backend/test-results/
+frontend/playwright-report/
+frontend/blob-report/
+frontend/playwright/.cache/
+frontend/tsconfig.tsbuildinfo
+/test-results/
+.playwright-mcp/
+
+# Working scratch — screenshots, prototypes, throwaway notes.
+# Anything that should not be committed long-term goes here.
+scratch/
+.superdev/
+
+# Python bytecode from local media helper verification
+__pycache__/
+*.pyc

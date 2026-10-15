@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "open-brain-lite": {
+      "command": "bash",
+      "args": [
+        "${CLAUDE_PLUGIN_ROOT}/scripts/mcp.sh"
+      ]
+    }
+  }
+}

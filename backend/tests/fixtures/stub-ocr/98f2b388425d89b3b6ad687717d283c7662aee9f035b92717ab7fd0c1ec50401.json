@@ -1,0 +1,7 @@
+{
+  "_fixture_source": "Hand-written stand-in for what Gemini multimodal would OCR from backend/tests/fixtures/e2e/sample.png. Keyed by the sha256 of the file bytes — regenerate this fixture under a new filename if the source image changes. Text below mirrors what is visually present in the image.",
+  "title": "pgvector + HNSW vs IVFFlat — Open Brain v2 OCR test",
+  "topics": ["pgvector", "hnsw", "ivfflat", "anthropic-haiku", "ocr-test"],
+  "extracted_text": "pgvector + HNSW\n\nIVFFlat tradeoffs\n\nAnthropic Haiku 4.5\n\nOpen Brain v2 OCR test",
+  "published_at": null
+}

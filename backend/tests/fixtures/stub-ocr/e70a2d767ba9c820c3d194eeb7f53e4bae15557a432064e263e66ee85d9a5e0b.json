@@ -1,0 +1,7 @@
+{
+  "_fixture_source": "Hand-written stand-in for what Gemini multimodal would transcribe from backend/tests/fixtures/e2e/sample.wav. Keyed by the sha256 of the file bytes — regenerate this fixture under a new filename if the source audio changes. The seed WAV is ~5s of synthetic speech for E2E testing.",
+  "title": "Sample audio for E2E tests — embedding pipeline check",
+  "topics": ["audio", "transcription", "open-brain", "e2e-test"],
+  "extracted_text": "This is a short sample audio clip used by the Open Brain v2 end-to-end tests. The ingest pipeline should transcribe this clip, chunk it, and route the chunks through the embedding provider. If you can read this in the reader drawer, the audio extraction path is wired up correctly.",
+  "published_at": null
+}
