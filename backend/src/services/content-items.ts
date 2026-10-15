@@ -74,7 +74,7 @@ export interface CreateContentResult {
  * synchronously after the cheap prelude (dedup + blob upload + early row
  * insert). The rest of the pipeline (metadata, chunking, embedding, graph)
  * runs on `completion`. REST adapters return `id` immediately and let
- * `completion` finish in the background. MCP adapters await `completion`
+ * `completion` finish in the background. Legacy cloud MCP adapters await `completion`
  * to preserve their existing sync contract.
  */
 export interface StartContentResult {

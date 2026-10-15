@@ -16,6 +16,9 @@ import { StubEmbeddingProvider, StubLLMProvider } from '../../src/providers/stub
 import { mockBlobStorage } from '../helpers/mocks.js';
 import type { DbClient } from '../../src/db/client.js';
 import type { ServiceDeps } from '../../src/services/index.js';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+import { createMcpServer } from '../../src/mcp/server.js';
 
 // Executes real PostgreSQL SQL and pgvector in WASM. Inference is explicitly stubbed.
 // Docker, network inference, and browser acceptance are separate live checks.
@@ -178,6 +181,41 @@ describe('local PostgreSQL and durable project contract', () => {
       expect((await getProjectContext(faulty, project.id)).sessions[0].id).toBe(session.id);
     } finally {
       finish({ content: '{"title":"Delayed metadata","topics":[]}', tokensUsed: { input: 1, output: 1, total: 2 } });
+    }
+  });
+
+  it('captures through a real MCP client and exposes pending then ready source state', async () => {
+    const project = await createProject(deps, 'MCP background capture', null);
+    let finish!: (value: any) => void;
+    const metadata = new Promise<any>(resolve => { finish = resolve; });
+    const slow = { ...deps, metadataLLM: { complete: vi.fn(() => metadata) } };
+    const server = createMcpServer(slow);
+    const client = new Client({ name: 'capture-regression', version: '1' });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+    let captured: Awaited<ReturnType<Client['callTool']>> | undefined;
+    const capture = client.callTool({ name: 'create', arguments: { type: 'note', content: 'Keep the original project facts.', project_ids: [project.id] } })
+      .then(result => { captured = result; });
+    try {
+      await vi.waitFor(() => expect(captured).toBeDefined());
+      expect(captured?.isError).not.toBe(true);
+      const saved = JSON.parse((captured!.content as Array<{ text: string }>)[0].text);
+      expect(saved.status).toBe('pending');
+      const pending = await client.callTool({ name: 'get', arguments: { id: saved.id } });
+      expect(JSON.parse((pending.content as Array<{ text: string }>)[0].text)).toMatchObject({
+        content: 'Keep the original project facts.', processing_status: 'pending', project_ids: [project.id],
+      });
+      finish({ content: '{"title":"Project facts","topics":[]}', tokensUsed: { input: 1, output: 1, total: 2 } });
+      await vi.waitFor(async () => {
+        const done = await client.callTool({ name: 'get', arguments: { id: saved.id } });
+        expect(JSON.parse((done.content as Array<{ text: string }>)[0].text).processing_status).toBe('ready');
+      });
+    } finally {
+      finish({ content: '{"title":"Project facts","topics":[]}', tokensUsed: { input: 1, output: 1, total: 2 } });
+      await capture;
+      await client.close();
+      await server.close();
     }
   });
 

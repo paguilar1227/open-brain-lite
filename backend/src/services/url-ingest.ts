@@ -41,7 +41,7 @@ export interface IngestFromUrlInput {
 /**
  * Returned by `ingestFromUrl`. Mirrors `StartContentResult` from content-items
  * with URL-specific fields. REST adapters return id+status immediately; MCP
- * adapters await `completion` to preserve the existing sync contract.
+ * adapters acknowledge local capture while legacy cloud MCP awaits `completion`.
  */
 export interface IngestFromUrlResult {
   id: string;

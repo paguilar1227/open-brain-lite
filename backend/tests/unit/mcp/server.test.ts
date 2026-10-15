@@ -2,6 +2,8 @@ import { describe, it, expect, vi } from 'vitest';
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import { createMcpServer } from '../../../src/mcp/server.js';
 import type { ServiceDeps } from '../../../src/services/index.js';
+import * as contentServices from '../../../src/services/content-items.js';
+import * as urlServices from '../../../src/services/url-ingest.js';
 
 function mockDeps(): ServiceDeps {
   const deps: ServiceDeps = {
@@ -302,6 +304,41 @@ describe('MCP server', () => {
       body: JSON.parse(await callRes.text()),
       sqlCalls,
     };
+  }
+
+  for (const entry of [
+    { tool: 'create', service: 'createContentItem', args: { type: 'note', content: 'Durable source' } },
+    { tool: 'update', service: 'editContentBody', args: { kind: 'content', id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', content: 'Updated source' } },
+    { tool: 'retry', service: 'retryContentIngest', args: { id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' } },
+    { tool: 'reprocess', service: 'reprocessContent', args: { id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' } },
+    { tool: 'replace', service: 'replaceContent', args: { id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', content: 'Replacement source' } },
+    { tool: 'save_from_url', service: 'ingestFromUrl', args: { url: 'https://example.com/article' } },
+  ] as const) {
+    it(`${entry.tool} acknowledges local source capture before slow indexing completes`, async () => {
+      const deps = mockDeps();
+      deps.config.llmProvider = 'ollama';
+      let finish!: (value: any) => void;
+      const completion = new Promise(resolve => { finish = resolve; });
+      const id = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
+      const started = { id, oldId: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', newId: id, status: 'pending', completion,
+        title: 'Source captured', type: 'document', source_url: 'https://example.com/article', deduped: false, url_type: 'html' };
+      const module = entry.service === 'ingestFromUrl' ? urlServices : contentServices;
+      const spy = vi.spyOn(module as any, entry.service).mockResolvedValue(started);
+      let reply: Awaited<ReturnType<typeof callTool>> | undefined;
+      const call = callTool(deps, entry.args, entry.tool).then(value => { reply = value; });
+      try {
+        await vi.waitFor(() => expect(reply).toBeDefined());
+        expect(reply!.body.result.isError).not.toBe(true);
+        const saved = JSON.parse(reply!.body.result.content[0].text);
+        expect(saved.id ?? saved.new_id).toBe(id);
+        expect(saved.status).toBe('pending');
+        expect(saved.chunkCount).toBeUndefined();
+      } finally {
+        finish({ id, title: 'Indexed', status: 'ready', chunkCount: 1 });
+        await call;
+        spy.mockRestore();
+      }
+    });
   }
 
   it('update kind=todo flips status and forwards the right SET clauses', async () => {
