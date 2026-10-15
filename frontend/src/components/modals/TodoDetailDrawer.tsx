@@ -688,4 +688,3 @@ function CommentRow({ todoId, comment }: CommentRowProps) {
     </div>
   );
 }
-

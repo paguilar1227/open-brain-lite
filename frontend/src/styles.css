@@ -3756,4 +3756,3 @@ textarea.input { resize: vertical; min-height: 80px; line-height: 1.5; }
 .todos-done-head { cursor: pointer; }
 .todos-done-chev { margin-left: auto; transition: transform 120ms; color: var(--fg-subtle); }
 .todos-done-chev.open { transform: rotate(90deg); }
-

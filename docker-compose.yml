@@ -1,0 +1,54 @@
+name: open-brain-lite
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: openbrain
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Run ./scripts/setup.sh first}
+      POSTGRES_DB: openbrain
+    volumes:
+      - database:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U openbrain -d openbrain"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+  ollama:
+    image: ollama/ollama:0.18.2
+    volumes:
+      - models:/root/.ollama
+  app:
+    build: .
+    init: true
+    ports:
+      - "${BIND_ADDRESS:-127.0.0.1}:${PORT:-3210}:3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgres://openbrain:${POSTGRES_PASSWORD}@db:5432/openbrain
+      OPEN_BRAIN_API_KEY: ${OPEN_BRAIN_API_KEY:?Run ./scripts/setup.sh first}
+      STORAGE_PROVIDER: local
+      FILES_DIR: /data/files
+      AUTH_DIR: /data/auth
+      SETTINGS_PATH: /data/settings.json
+      CODEX_HOME: /data/auth/codex
+      COPILOT_HOME: /data/auth/copilot
+      LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
+      OLLAMA_URL: ${OLLAMA_URL:-http://ollama:11434}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-embeddinggemma}
+      LOCAL_MODEL: ${LOCAL_MODEL:-qwen3.5:4b}
+      TIMEZONE: ${TIMEZONE:-America/Chicago}
+    volumes:
+      - files:/data
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+volumes:
+  database:
+  files:
+  models:
