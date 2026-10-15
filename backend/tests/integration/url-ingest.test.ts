@@ -239,6 +239,34 @@ describe('POST /api/v1/content/from-url', () => {
     expect(fetchXThread).toHaveBeenCalledWith('https://x.com/user/status/1234567890');
   });
 
+  it('imports text-only X posts in Lite mode and preserves their source and project scope', async () => {
+    deps.config.llmProvider = 'ollama';
+    vi.mocked(deps.db.query).mockImplementation(async (sql: string) => {
+      if (sql.includes('INSERT INTO content_items')) return { rows: [{ id: 'local-x-ci' }] } as any;
+      return { rows: [] } as any;
+    });
+    const fetchMock = vi.fn().mockResolvedValue(Response.json({
+      author_name: 'jack', html: '<blockquote class="twitter-tweet"><p>just setting up my twttr</p></blockquote>',
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+      const res = await app.fetch(new Request('http://localhost/api/v1/content/from-url', {
+        method: 'POST', headers: AUTH,
+        body: JSON.stringify({ url: 'https://x.com/jack/status/20', project_ids: ['123e4567-e89b-12d3-a456-426614174000'] }),
+      }));
+      expect(res.status).toBe(202);
+      expect(await res.json()).toMatchObject({ id: 'local-x-ci', url_type: 'x', source_url: 'https://x.com/jack/status/20' });
+      const insert = vi.mocked(deps.db.query).mock.calls.find(call => call[0].includes('INSERT INTO content_items'));
+      expect(insert?.[1]).toContain('just setting up my twttr');
+      expect(insert?.[1]).toContain('https://x.com/jack/status/20');
+      expect(insert?.[1]).toContainEqual(['123e4567-e89b-12d3-a456-426614174000']);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(XaiClient)).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('ingests HTML — uses Firecrawl markdown', async () => {
     // Content must exceed MIN_HTML_CONTENT_CHARS (300) or the pipeline rejects it as a
     // suspected placeholder/error page. Use a real-feeling body.

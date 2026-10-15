@@ -1,5 +1,6 @@
 import { extractLocalMedia } from '../capture/local-media.js';
 import { scrapeLocal } from '../providers/local-web.js';
+import { fetchPublicXPost } from '../providers/local-x.js';
 /**
  * URL ingestion orchestrator.
  *
@@ -10,10 +11,10 @@ import { scrapeLocal } from '../providers/local-web.js';
  * re-ingesting.
  *
  * Supported URL types:
- *   - YouTube → Supadata transcript API (single call, no fallback by design)
- *   - X/Twitter threads → xAI Grok x_search
+ *   - YouTube → local captions or Whisper (legacy cloud mode uses Supadata)
+ *   - X/Twitter → public post text (legacy cloud mode uses xAI threads)
  *   - PDF / image / audio / video direct links → download bytes, reuse the file pipeline
- *   - Generic HTML → Firecrawl markdown extraction
+ *   - Generic HTML → local Readability (legacy cloud mode uses Firecrawl)
  */
 
 import type { ServiceDeps } from './index.js';
@@ -142,7 +143,8 @@ export async function ingestFromUrl(
   console.log(`[url-ingest] Detected type: ${urlType}`);
 
   if (deps.config.llmProvider !== 'real' && (urlType === 'youtube' || urlType === 'x')) {
-    const media = await extractLocalMedia('url', normalized);
+    const media = urlType === 'x' ? await fetchPublicXPost(normalized) : await extractLocalMedia('url', normalized);
+    recordStage(trace, urlType === 'x' ? 'x.public_post' : 'youtube.local_transcript', media.text);
     const started = await createContentItem(deps, { type: 'document', title: opts.title ?? media.title, content: media.text, sourceUrl: normalized, projectIds: opts.projectIds, tags: opts.tags, trace });
     return { id: started.id, title: opts.title ?? media.title ?? 'Transcript', type: 'document', source_url: normalized, deduped: false, url_type: urlType, status: started.status, completion: started.completion };
   }

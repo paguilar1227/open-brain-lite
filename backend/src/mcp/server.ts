@@ -1089,17 +1089,17 @@ State: refuses pending rows with IN_FLIGHT (don't replace an in-flight ingest). 
   // ---------- 7. save_from_url ----------
   server.tool(
     'save_from_url',
-    `Fetch a URL and save its content to Open Brain. Handles YouTube videos (transcripts, not the file), X/Twitter threads, PDFs, HTML articles (incl. Reddit/blogs), and direct image/audio links. The original URL is preserved as the item's source and surfaced in search citations.
+    `Fetch a URL and save its content to Open Brain. Handles YouTube videos (transcripts, not the file), public X/Twitter posts, PDFs, HTML articles (incl. Reddit/blogs), and direct image/audio links. The original URL is preserved as the item's source and surfaced in search citations.
 
-Use this INSTEAD of \`create\` whenever the user wants to save something they've referenced by URL ("save this article", "save this YouTube video to my project", "grab this tweet thread"). The MCP payload is tiny (just the URL), backend does the fetch — avoids the size/approval-dialog issues with pasting large content through \`create\`.
+Use this INSTEAD of \`create\` whenever the user wants to save something they've referenced by URL ("save this article", "save this YouTube video to my project", "grab this post"). The MCP payload is tiny (just the URL), backend does the fetch — avoids the size/approval-dialog issues with pasting large content through \`create\`.
 
 Dedup: if this URL is already saved, returns the existing item with \`deduped: true\`. Safe to call repeatedly.
 
 Supported URLs:
-- YouTube (youtube.com/watch?v=..., youtu.be/..., shorts, embed) → transcript via Supadata
-- X/Twitter (x.com/user/status/..., twitter.com/user/status/...) → thread via xAI x_search
+- YouTube (youtube.com/watch?v=..., youtu.be/..., shorts, embed) → source captions or local Whisper transcription
+- X/Twitter (x.com/user/status/..., twitter.com/user/status/...) → referenced public post text only, not the full thread or attached media
 - PDF URLs, image URLs, audio URLs → downloaded and run through the file pipeline
-- Everything else → treated as HTML, Firecrawl markdown extraction
+- Everything else → treated as HTML, local Readability extraction
 
 Returns \`{ id, title, type, source_url, deduped, chunkCount, url_type }\`.`,
     {
