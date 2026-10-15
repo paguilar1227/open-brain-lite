@@ -1,5 +1,5 @@
 import { LlamaCppProvider } from './llama.js';
-import { CopilotClient } from '@github/copilot-sdk';
+import { CopilotClient, RuntimeConnection } from '@github/copilot-sdk';
 import { Codex } from '@openai/codex-sdk';
 import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -7,6 +7,7 @@ import type { LLMProvider, LLMMessage, LLMOptions, LLMResponse } from './types.j
 import { extractJson } from './json-utils.js';
 import type { Config } from '../config.js';
 import { OllamaLLMProvider } from './ollama.js';
+import { providerEnvironment } from './environment.js';
 
 function promptFor(messages: LLMMessage[], options: LLMOptions) {
   return [options.systemPrompt ?? '', options.responseFormat === 'json' ? 'Return valid JSON only.' : '',
@@ -24,7 +25,7 @@ export class SubscriptionLLMProvider implements LLMProvider {
     let content: string;
     let usage = { input: 0, output: 0, total: 0 };
     if (this.config.llmProvider === 'copilot') {
-      const client = new CopilotClient({ mode: 'empty', baseDirectory: join(this.config.authDir, 'copilot'), workingDirectory });
+      const client = new CopilotClient({ mode: 'empty', connection: RuntimeConnection.forStdio(), env: providerEnvironment(this.config.authDir, 'copilot'), baseDirectory: join(this.config.authDir, 'copilot'), workingDirectory });
       await client.start();
       try {
         if (!(await client.getAuthStatus()).isAuthenticated) throw new Error('Sign in to Copilot in Settings first.');
@@ -37,7 +38,8 @@ export class SubscriptionLLMProvider implements LLMProvider {
         } finally { await session.disconnect(); }
       } finally { await client.stop(); }
     } else if (this.config.llmProvider === 'chatgpt') {
-      const codex = new Codex({ env: { ...Object.fromEntries(Object.entries(process.env).filter((entry): entry is [string,string] => entry[1] !== undefined && !['OPENAI_API_KEY', 'OPENAI_BASE_URL'].includes(entry[0]))), CODEX_HOME: join(this.config.authDir, 'codex') }, config: { features: { shell_tool: false } } });
+      await mkdir(join(this.config.authDir, 'codex'), { recursive: true });
+      const codex = new Codex({ env: providerEnvironment(this.config.authDir, 'chatgpt'), config: { features: { shell_tool: false } } });
       const thread = codex.startThread({ model: this.config.chatgptModel, workingDirectory, skipGitRepoCheck: true, sandboxMode: 'read-only', approvalPolicy: 'never', networkAccessEnabled: false, webSearchMode: 'disabled' });
       const result = await thread.run(prompt);
       content = result.finalResponse;

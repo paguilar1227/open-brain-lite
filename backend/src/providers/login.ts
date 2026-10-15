@@ -1,9 +1,11 @@
 import { spawn, type ChildProcess } from 'node:child_process';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
+import { createRequire } from 'node:module';
 import { mkdir } from 'node:fs/promises';
 import type { Config } from '../config.js';
+import { providerEnvironment } from './environment.js';
 type Provider = 'copilot' | 'chatgpt';
+const require = createRequire(import.meta.url);
 type LoginState = { status: 'running' | 'succeeded' | 'failed'; url?: string; code?: string; message?: string; child?: ChildProcess };
 export class ProviderLogin {
   private states = new Map<Provider, LoginState>();
@@ -14,13 +16,12 @@ export class ProviderLogin {
   }
   async start(provider: Provider) {
     if (this.states.get(provider)?.status === 'running') return this.status(provider);
-    await mkdir(this.config.authDir, { recursive: true });
+    await mkdir(join(this.config.authDir, provider === 'chatgpt' ? 'codex' : 'copilot'), { recursive: true });
     let command: string;
     let args: string[];
     if (provider === 'chatgpt') {
       command = process.execPath;
-      const entry = fileURLToPath(import.meta.resolve('@openai/codex-sdk'));
-      const cli = join(dirname(entry), '../../codex/bin/codex.js');
+      const cli = require.resolve('@openai/codex/bin/codex.js');
       args = [cli, 'login', '--device-auth'];
     } else {
       // Runtime API is pinned with the SDK dependency. No global CLI/auth state is used.
@@ -29,11 +30,7 @@ export class ProviderLogin {
       command = await runtime.ensureRuntimeBundle('1.0.98');
       args = ['login', '--device-code'];
     }
-    const env: NodeJS.ProcessEnv = { ...process.env, CODEX_HOME: join(this.config.authDir, 'codex'), COPILOT_HOME: join(this.config.authDir, 'copilot') };
-    delete env.OPENAI_API_KEY;
-    delete env.GITHUB_TOKEN;
-    delete env.GH_TOKEN;
-    delete env.COPILOT_GITHUB_TOKEN;
+    const env = providerEnvironment(this.config.authDir, provider);
     const child = spawn(command, args, { env, stdio: ['ignore', 'pipe', 'pipe'] });
     const state: LoginState = { status: 'running', child };
     this.states.set(provider, state);
