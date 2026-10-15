@@ -26,6 +26,9 @@ async function openSettings(page: Page) {
 export function liteContract() {
   setup();
   test('project memory: session handoff and consolidation survive a fresh page', async ({ page }) => {
+    // Real cold-model preparation measured 84s; consolidation plus indexing can
+    // exceed the standard UI deadline. Use Playwright's slow-workload deadline.
+    test.slow();
     const runtime = await api<{ provider: string }>('GET', '/api/v1/runtime');
     expect(['stub', 'ollama', 'llama.cpp']).toContain(runtime.provider);
     const name = `${stamp()} Durable project`;
@@ -57,14 +60,18 @@ export function liteContract() {
     expect(completed.ok()).toBe(true);
     const memory = await completed.json();
     expect(memory.summary).toBeTruthy();
-    await expect(panel).toContainText(memory.summary);
+    const renderedMemory = panel.getByRole('region', { name: 'Consolidated project memory' });
+    await expect(renderedMemory).toHaveAttribute('data-memory-id', memory.id);
+    expect((await renderedMemory.innerText()).trim()).not.toBe('');
     await expect(panel).toContainText(session.summary);
 
     await page.reload();
     await waitForAppReady(page);
     await openProject(page, name);
     await page.getByRole('tab', { name: 'Memory', exact: true }).click();
-    await expect(page.locator('.memory-panel')).toContainText(memory.summary);
+    await expect(page.getByRole('region', { name: 'Consolidated project memory' })).toHaveAttribute('data-memory-id', memory.id);
+    const restored = await api<{ memory: { id: string; summary: string } }>('GET', `/api/v1/projects/${project.id}/context`);
+    expect(restored.memory).toMatchObject({ id: memory.id, summary: memory.summary });
     await expect(page.locator('.memory-panel')).toContainText(session.summary);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   });

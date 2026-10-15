@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { OllamaEmbeddingProvider, OllamaLLMProvider } from '../../../src/providers/ollama.js';
+import { ensureOllamaModels, OllamaEmbeddingProvider, OllamaLLMProvider } from '../../../src/providers/ollama.js';
 afterEach(() => vi.unstubAllGlobals());
 describe('Ollama local providers', () => {
   it('requires an actual model vector with the database dimensionality', async () => {
@@ -20,5 +20,20 @@ describe('Ollama local providers', () => {
   it('reports missing models without returning a fake vector', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('model not found', { status: 404 })));
     await expect(new OllamaEmbeddingProvider('http://ollama:11434', 'missing').embed('query')).rejects.toThrow('404');
+  });
+  it('prepares both models on the configured runtime, including a native endpoint', async () => {
+    const fetcher = vi.fn().mockImplementation(async () => new Response(JSON.stringify({ status: 'success' })));
+    vi.stubGlobal('fetch', fetcher);
+    await ensureOllamaModels('http://host.docker.internal:11434/', ['embeddinggemma', 'chosen-local-model']);
+    expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
+      'http://host.docker.internal:11434/api/pull', 'http://host.docker.internal:11434/api/pull',
+    ]);
+    expect(fetcher.mock.calls.map(([, options]) => JSON.parse(options.body))).toEqual([
+      { model: 'embeddinggemma', stream: false }, { model: 'chosen-local-model', stream: false },
+    ]);
+  });
+  it('refuses to report ready when model preparation returns an error', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: 'unsupported model' }))));
+    await expect(ensureOllamaModels('http://ollama:11434', ['missing'])).rejects.toThrow('unsupported model');
   });
 });

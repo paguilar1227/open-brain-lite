@@ -1,10 +1,14 @@
 // Runs only against local Ollama; never invokes a subscription provider.
 import assert from 'node:assert/strict';
-import { OllamaEmbeddingProvider, OllamaLLMProvider } from '../backend/dist/providers/ollama.js';
+import { ensureOllamaModels, OllamaEmbeddingProvider, OllamaLLMProvider } from '../backend/dist/providers/ollama.js';
+import { loadConfig } from '../backend/dist/config.js';
 
-const url = process.env.OLLAMA_URL || 'http://ollama:11434';
-const embeddingModel = process.env.EMBEDDING_MODEL || 'embeddinggemma';
-const completionModel = process.env.LOCAL_MODEL || 'qwen3.5:4b';
+// Read persisted model settings just as the application does.
+const config = loadConfig();
+const url = config.ollamaUrl;
+const embeddingModel = config.embeddingModel;
+const completionModel = config.localModel;
+if (process.argv.includes('--pull')) await ensureOllamaModels(url, [embeddingModel, completionModel]);
 const embedding = new OllamaEmbeddingProvider(url, embeddingModel);
 const completion = new OllamaLLMProvider(url, completionModel);
 const started = performance.now();

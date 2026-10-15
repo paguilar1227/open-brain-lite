@@ -7,7 +7,7 @@ import { PGlite } from '@electric-sql/pglite';
 import { vector } from '@electric-sql/pglite-pgvector';
 import { uuid_ossp } from '@electric-sql/pglite/contrib/uuid_ossp';
 import { createProject } from '../../src/services/projects.js';
-import { getProjectContext, saveProjectSession } from '../../src/services/project-memory.js';
+import { consolidateProject, getProjectContext, saveProjectSession } from '../../src/services/project-memory.js';
 import * as content from '../../src/services/content-items.js';
 import { createTodo } from '../../src/services/todos.js';
 import { findSimilarTodos, findTodosByLexical } from '../../src/db/todos.js';
@@ -56,6 +56,64 @@ describe('local PostgreSQL and durable project contract', () => {
     expect(context.sessions[0].note_id).toBeTruthy();
     const note = await pg.query<{ content: string }>('SELECT content FROM content_items WHERE id = $1', [saved.note_id]);
     expect(note.rows[0].content).toContain('Keep documents on the machine');
+  });
+
+  it('rolls back the session and its note together if linking fails, then safely retries', async () => {
+    const project = await createProject(deps, 'Interrupted session', null);
+    const input = { session_key: 'interrupted', summary: 'Atomic handoff source', decisions: ['Keep both records together'], next_steps: [] };
+    await pg.exec(`CREATE FUNCTION fail_session_link() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'injected link failure'; END; $$;
+      CREATE TRIGGER fail_session_link BEFORE UPDATE ON project_sessions FOR EACH ROW EXECUTE FUNCTION fail_session_link();`);
+    try {
+      await expect(saveProjectSession(deps, project.id, input)).rejects.toThrow('injected link failure');
+    } finally {
+      await pg.exec('DROP TRIGGER fail_session_link ON project_sessions; DROP FUNCTION fail_session_link();');
+    }
+    await Promise.all(jobs);
+    expect((await getProjectContext(deps, project.id)).sessions).toHaveLength(0);
+    expect((await pg.query('SELECT id FROM content_items WHERE project_ids @> ARRAY[$1]::uuid[]', [project.id])).rows).toHaveLength(0);
+    const saved = await saveProjectSession(deps, project.id, input);
+    expect(saved.note_id).toBeTruthy();
+  });
+
+  it('repairs an earlier unlinked session using the original facts', async () => {
+    const project = await createProject(deps, 'Repair old handoff', null);
+    await pg.query(`INSERT INTO project_sessions(project_id, session_key, summary, decisions, next_steps)
+      VALUES ($1, 'old-session', 'Original durable facts', ARRAY['Original choice'], ARRAY['Original next action'])`, [project.id]);
+    const saved = await saveProjectSession(deps, project.id, {
+      session_key: 'old-session', summary: 'Different retry body', decisions: [], next_steps: [],
+    });
+    expect(saved.note_id).toBeTruthy();
+    const note = await pg.query<{ content: string }>('SELECT content FROM content_items WHERE id = $1', [saved.note_id]);
+    expect(note.rows[0].content).toContain('Original durable facts');
+    expect(note.rows[0].content).toContain('Original choice');
+    expect(note.rows[0].content).not.toContain('Different retry body');
+  });
+
+  it('creates one searchable handoff for concurrent saves of the same session', async () => {
+    const project = await createProject(deps, 'Concurrent handoffs', null);
+    const input = { session_key: 'same-session', summary: 'Shared session source', decisions: [], next_steps: [] };
+    const saved = await Promise.all([saveProjectSession(deps, project.id, input), saveProjectSession(deps, project.id, input)]);
+    expect(saved[0].id).toBe(saved[1].id);
+    expect(saved[0].note_id).toBe(saved[1].note_id);
+    const notes = await pg.query('SELECT id FROM content_items WHERE project_ids @> ARRAY[$1]::uuid[]', [project.id]);
+    expect(notes.rows).toHaveLength(1);
+  });
+
+  it('commits consolidated memory and its searchable note together', async () => {
+    const project = await createProject(deps, 'Atomic consolidated memory', null);
+    await pg.exec(`CREATE FUNCTION fail_memory_note() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
+      IF NEW.folder = 'system/memory' THEN RAISE EXCEPTION 'injected memory note failure'; END IF;
+      RETURN NEW; END; $$;
+      CREATE TRIGGER fail_memory_note BEFORE INSERT ON content_items FOR EACH ROW EXECUTE FUNCTION fail_memory_note();`);
+    try {
+      await expect(consolidateProject(deps, project.id)).rejects.toThrow('injected memory note failure');
+    } finally {
+      await pg.exec('DROP TRIGGER fail_memory_note ON content_items; DROP FUNCTION fail_memory_note();');
+    }
+    expect((await getProjectContext(deps, project.id)).memory).toBeNull();
+    const saved = await consolidateProject(deps, project.id);
+    const note = await pg.query<{ content: string }>('SELECT content FROM content_items WHERE id = $1', [saved.note_id]);
+    expect(note.rows[0].content).toBe(saved.summary);
   });
 
   it('applies project scope before limiting both lexical and vector todo results', async () => {

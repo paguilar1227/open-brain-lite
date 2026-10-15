@@ -84,7 +84,7 @@ export interface ListContentItemsFilters {
 }
 
 export async function insertContentItem(
-  db: DbClient,
+  db: Pick<DbClient, 'query'>,
   item: ContentItemInsert,
 ): Promise<{ id: string }> {
   const result = await db.query(

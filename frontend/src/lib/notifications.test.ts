@@ -35,4 +35,21 @@ describe('browser reminders', () => {
     vi.stubGlobal('isSecureContext', false);
     await expect(enableNotifications()).rejects.toThrow('HTTPS');
   });
+  it('does not deliver an in-flight reminder after reminders are disabled', async () => {
+    let complete!: (value: unknown) => void;
+    vi.mocked(liteRequest).mockReturnValueOnce(new Promise(resolve => { complete = resolve; }));
+    localStorage.setItem('obl-notifications', 'enabled');
+    const checking = checkNotifications();
+    await vi.waitFor(() => expect(liteRequest).toHaveBeenCalledTimes(1));
+    localStorage.removeItem('obl-notifications');
+    complete({ notifications: [{ id: 'pending', title: 'Todo due', body: 'Disabled reminder', project_id: null }] });
+    await checking;
+    expect(showNotification).not.toHaveBeenCalled();
+  });
+  it('delivers once when timer and focus checks overlap', async () => {
+    localStorage.setItem('obl-notifications', 'enabled');
+    await Promise.all([checkNotifications(), checkNotifications()]);
+    expect(liteRequest).toHaveBeenCalledTimes(1);
+    expect(showNotification).toHaveBeenCalledTimes(1);
+  });
 });

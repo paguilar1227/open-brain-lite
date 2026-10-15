@@ -16,4 +16,5 @@ jobs:
       - run: npm test
       - run: npm run test:frontend
       - run: python3 -m py_compile backend/python/media.py
+      - run: python3 -m unittest discover -s backend/python -p 'test_*.py'
       - run: bash -n scripts/setup.sh scripts/install-plugin.sh plugin/scripts/mcp.sh

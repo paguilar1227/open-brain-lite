@@ -17,14 +17,32 @@ def transcribe(path):
     return '\n'.join(segment.text.strip() for segment in segments)
 
 
+def caption_language(info):
+    """Pick one source-language track; avoid downloading translated variants."""
+    language = info.get('language')
+    for tracks in (info.get('subtitles') or {}, info.get('automatic_captions') or {}):
+        if not tracks:
+            continue
+        for preferred in (f'{language}-orig', language, 'en-orig', 'en'):
+            if preferred in tracks:
+                return preferred
+        return next((code for code in tracks if code.endswith('-orig')), next(iter(tracks)))
+    return None
+
+
 def from_url(url):
     import yt_dlp
     with tempfile.TemporaryDirectory(prefix='brain-media-') as directory:
-        options = {'quiet': True, 'no_warnings': True, 'noplaylist': True, 'skip_download': True,
-                   'writesubtitles': True, 'writeautomaticsub': True, 'subtitleslangs': ['en.*'],
+        options = {'quiet': True, 'no_warnings': True, 'noprogress': True, 'noplaylist': True, 'skip_download': True,
+                   'writesubtitles': True, 'writeautomaticsub': True, 'subtitleslangs': [],
                    'subtitlesformat': 'vtt', 'outtmpl': str(Path(directory) / 'source.%(ext)s')}
         with yt_dlp.YoutubeDL(options) as downloader:
-            info = downloader.extract_info(url, download=True)
+            info = downloader.extract_info(url, download=False)
+        language = caption_language(info)
+        if language:
+            options['subtitleslangs'] = [re.escape(language)]
+            with yt_dlp.YoutubeDL(options) as downloader:
+                info = downloader.extract_info(url, download=True)
         subtitle_text = []
         for subtitle in Path(directory).glob('*.vtt'):
             previous = ''

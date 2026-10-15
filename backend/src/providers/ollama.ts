@@ -8,6 +8,15 @@ async function post(baseUrl: string, path: string, body: unknown): Promise<any> 
   return response.json();
 }
 
+/** Downloads to the same Ollama instance used for inference, including native hosts. */
+export async function ensureOllamaModels(baseUrl: string, models: string[]): Promise<void> {
+  for (const model of new Set(models)) {
+    console.log(`[models] Preparing ${model}`);
+    const result = await post(baseUrl, '/api/pull', { model, stream: false });
+    if (result.error || result.status !== 'success') throw new Error(`Could not prepare ${model}: ${result.error || result.status || 'no completion status'}`);
+  }
+}
+
 export class OllamaEmbeddingProvider implements EmbeddingProvider {
   constructor(private baseUrl: string, private model: string, readonly dimensions = 768) {}
   async embed(content: string, files?: Array<{ data: Buffer; mimeType: string }>): Promise<number[]> {
