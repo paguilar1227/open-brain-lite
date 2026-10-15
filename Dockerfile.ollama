@@ -1,0 +1,29 @@
+# The default Compose runtime uses CPU. Keep the official release's CPU
+# variants and licenses, without unpacking unused multi-gigabyte GPU runtimes.
+FROM ubuntu:24.04 AS unpack
+ARG TARGETARCH
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl zstd \
+    && rm -rf /var/lib/apt/lists/*
+RUN set -eu; \
+    case "$TARGETARCH" in \
+      amd64) checksum=15f31e9576d15a481e099b4145dba6e9f8c1f295927d6b8895300ae30ed3740a ;; \
+      arm64) checksum=1a314ac530d2c23bf6d2aaaf4a4aba8cc0b2a4ee8bc8fae3f3aa88bff7f7177b ;; \
+      *) echo "Unsupported architecture: $TARGETARCH" >&2; exit 1 ;; \
+    esac; \
+    curl -fL "https://github.com/ollama/ollama/releases/download/v0.40.4/ollama-linux-${TARGETARCH}.tar.zst" -o /tmp/ollama.tar.zst; \
+    printf '%s  /tmp/ollama.tar.zst\n' "$checksum" | sha256sum -c -; \
+    mkdir /payload; \
+    tar --zstd -xf /tmp/ollama.tar.zst -C /payload \
+      --exclude='lib/ollama/cuda*' --exclude='lib/ollama/vulkan*' \
+      --exclude='lib/ollama/rocm*' --exclude='lib/ollama/jetpack*'; \
+    rm /tmp/ollama.tar.zst
+
+FROM ubuntu:24.04
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates libopenblas0 \
+    && rm -rf /var/lib/apt/lists/*
+COPY --from=unpack /payload/bin/ollama /usr/bin/ollama
+COPY --from=unpack /payload/lib/ollama /usr/lib/ollama
+ENV OLLAMA_HOST=0.0.0.0:11434 OLLAMA_NO_CLOUD=1
+EXPOSE 11434
+ENTRYPOINT ["/usr/bin/ollama"]
+CMD ["serve"]

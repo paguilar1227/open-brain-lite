@@ -13,6 +13,10 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci --ignore-scripts
+      - name: Record available disk before building
+        run: |
+          df -h
+          docker system df
       - name: Start the documented Docker installation and verify real models
         run: ./scripts/setup.sh
       - name: Verify ingestion, OCR, search, consolidation, and containerized plugin

@@ -14,7 +14,9 @@ services:
       timeout: 5s
       retries: 15
   ollama:
-    image: ollama/ollama:0.40.4
+    build:
+      context: .
+      dockerfile: Dockerfile.ollama
     environment:
       OLLAMA_NO_CLOUD: "1"
     volumes:
