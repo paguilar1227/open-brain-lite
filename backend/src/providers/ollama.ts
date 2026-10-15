@@ -1,11 +1,8 @@
 import type { EmbeddingProvider, LLMProvider, LLMMessage, LLMOptions, LLMResponse, LLMContentPart } from './types.js';
+import { postLocalJson } from './local-http.js';
 
 async function post(baseUrl: string, path: string, body: unknown): Promise<any> {
-  const response = await fetch(`${baseUrl.replace(/\/$/, '')}${path}`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
-  });
-  if (!response.ok) throw new Error(`Ollama ${path}: HTTP ${response.status}: ${(await response.text()).slice(0, 300)}`);
-  return response.json();
+  return postLocalJson(`${baseUrl.replace(/\/$/, '')}${path}`, body, `Ollama ${path}`);
 }
 
 /** Downloads to the same Ollama instance used for inference, including native hosts. */

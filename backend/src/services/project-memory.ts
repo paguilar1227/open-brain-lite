@@ -3,6 +3,35 @@ import type { DbClient } from '../db/client.js';
 import { insertContentItem } from '../db/content-items.js';
 import { newTrace } from '../capture/ingest-trace.js';
 import { runIngestTail } from './content-items.js';
+import { randomUUID } from 'node:crypto';
+
+interface ConsolidationJob {
+  id: string;
+  status: 'running' | 'completed' | 'failed';
+  started_at: string;
+  finished_at?: string;
+  memory_id?: string;
+  error?: string;
+}
+// One current operation per project. The completed memory is durable in SQL;
+// after a process restart an interrupted operation can be explicitly retried.
+const consolidationJobs = new WeakMap<DbClient, Map<string, ConsolidationJob>>();
+
+export async function startProjectConsolidation(deps: ServiceDeps, projectId: string): Promise<ConsolidationJob> {
+  await getProjectContext(deps, projectId);
+  let jobs = consolidationJobs.get(deps.db);
+  if (!jobs) { jobs = new Map(); consolidationJobs.set(deps.db, jobs); }
+  const existing = jobs.get(projectId);
+  if (existing?.status === 'running') return { ...existing };
+  const job: ConsolidationJob = { id: randomUUID(), status: 'running', started_at: new Date().toISOString() };
+  jobs.set(projectId, job);
+  void consolidateProject(deps, projectId).then(memory => {
+    Object.assign(job, { status: 'completed', memory_id: memory.id, finished_at: new Date().toISOString() });
+  }).catch(error => {
+    Object.assign(job, { status: 'failed', error: error instanceof Error ? error.message : String(error), finished_at: new Date().toISOString() });
+  });
+  return { ...job };
+}
 
 // Stage the source inside its owner's transaction. Model work starts only after
 // commit, so a crash can leave a recoverable pending note, never a missing one.
@@ -32,12 +61,14 @@ export async function getProjectContext(deps: ServiceDeps, projectId: string) {
     deps.db.query('SELECT * FROM project_sessions WHERE project_id = $1 ORDER BY created_at DESC', [projectId]),
     deps.db.query("SELECT id, content, status, priority, due_date, parent_id FROM todos WHERE project_id = $1 AND archived = false AND status <> 'done' ORDER BY created_at", [projectId]),
   ]);
-  return { project: project.rows[0], memory: memory.rows[0] ?? null, sessions: sessions.rows, open_todos: todos.rows };
+  const job = consolidationJobs.get(deps.db)?.get(projectId);
+  return { project: project.rows[0], memory: memory.rows[0] ?? null, sessions: sessions.rows, open_todos: todos.rows,
+    consolidation: job ? { ...job } : null };
 }
 
 export async function saveProjectSession(deps: ServiceDeps, projectId: string, session: {
   session_key: string; summary: string; decisions: string[]; next_steps: string[];
-}) {
+}, options: { waitForIndex?: boolean } = {}) {
   await getProjectContext(deps, projectId);
   // Idempotence is enforced by the DB, including concurrent callers.
   const result = await deps.db.transaction(async tx => {
@@ -57,7 +88,10 @@ export async function saveProjectSession(deps: ServiceDeps, projectId: string, s
     await tx.query('UPDATE project_sessions SET note_id = $1 WHERE id = $2', [note.id, row.id]);
     return { row: { ...row, note_id: note.id }, note };
   });
-  if (result.note) await indexMemoryNote(deps, result.note);
+  if (result.note) {
+    const indexing = indexMemoryNote(deps, result.note);
+    if (options.waitForIndex !== false) await indexing;
+  }
   return result.row;
 }
 

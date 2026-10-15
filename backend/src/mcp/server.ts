@@ -1,6 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { getProjectContext, saveProjectSession, consolidateProject } from '../services/project-memory.js';
+import { getProjectContext, saveProjectSession, startProjectConsolidation } from '../services/project-memory.js';
 import { SessionInput } from '../lite-routes.js';
 import type { ServiceDeps } from '../services/index.js';
 import * as projectsSvc from '../services/projects.js';
@@ -1153,8 +1153,8 @@ Returns \`{ id, title, type, source_url, deduped, chunkCount, url_type }\`.`,
   );
 
   server.tool('get_project_context', 'Start a new AI session here: load durable project memory, prior session handoffs, and open todos.', { project_id: z.string().uuid() }, async ({ project_id }) => ({ content: [{ type: 'text', text: JSON.stringify(await getProjectContext(deps, project_id)) }] }));
-  server.tool('save_session', 'Save a factual handoff with decisions and next actions. Use a stable session_key so retries are idempotent.', { project_id: z.string().uuid(), ...SessionInput.shape }, async ({ project_id, ...session }) => ({ content: [{ type: 'text', text: JSON.stringify(await saveProjectSession(deps, project_id, session)) }] }));
-  server.tool('consolidate_project', 'Generate a source-backed durable project summary using the configured model. Keeps previous summaries and source records.', { project_id: z.string().uuid() }, async ({ project_id }) => ({ content: [{ type: 'text', text: JSON.stringify(await consolidateProject(deps, project_id)) }] }));
+  server.tool('save_session', 'Save a factual handoff with decisions and next actions. Use a stable session_key so retries are idempotent. The handoff and source note are committed before returning; searchable indexing continues in the background.', { project_id: z.string().uuid(), ...SessionInput.shape }, async ({ project_id, ...session }) => ({ content: [{ type: 'text', text: JSON.stringify(await saveProjectSession(deps, project_id, session, { waitForIndex: false })) }] }));
+  server.tool('consolidate_project', 'Start a source-backed durable project summary using the configured model. Returns a job immediately so CPU inference does not hold the MCP call open. Poll get_project_context: consolidation.status is running, completed, or failed; completed includes memory_id. Keeps previous summaries and source records. An operation interrupted by a server restart can be started again.', { project_id: z.string().uuid() }, async ({ project_id }) => ({ content: [{ type: 'text', text: JSON.stringify(await startProjectConsolidation(deps, project_id)) }] }));
   return server;
 }
 

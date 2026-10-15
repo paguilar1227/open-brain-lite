@@ -58,7 +58,12 @@ export function liteContract() {
     await page.getByRole('button', { name: 'Consolidate memory', exact: true }).click();
     const completed = await response;
     expect(completed.ok()).toBe(true);
-    const memory = await completed.json();
+    expect(completed.status()).toBe(202);
+    const job = await completed.json();
+    expect(job.id).toBeTruthy();
+    await expect(page.getByRole('button', { name: 'Consolidate memory', exact: true })).toBeEnabled({ timeout: test.info().timeout });
+    const { memory, consolidation } = await api<{ memory: { id: string; summary: string }; consolidation: { status: string } }>('GET', `/api/v1/projects/${project.id}/context`);
+    expect(consolidation.status).toBe('completed');
     expect(memory.summary).toBeTruthy();
     const renderedMemory = panel.getByRole('region', { name: 'Consolidated project memory' });
     await expect(renderedMemory).toHaveAttribute('data-memory-id', memory.id);

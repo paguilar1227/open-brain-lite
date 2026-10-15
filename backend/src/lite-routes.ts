@@ -2,7 +2,7 @@ import { ProviderLogin } from './providers/login.js';
 import { z } from 'zod';
 import type { OpenAPIHono } from '@hono/zod-openapi';
 import type { ServiceDeps } from './services/index.js';
-import { consolidateProject, getProjectContext, saveProjectSession } from './services/project-memory.js';
+import { startProjectConsolidation, getProjectContext, saveProjectSession } from './services/project-memory.js';
 import { saveRuntimeConfig } from './config.js';
 
 export const SessionInput = z.object({ session_key: z.string().min(1), summary: z.string().min(1), decisions: z.array(z.string()).default([]), next_steps: z.array(z.string()).default([]) });
@@ -18,8 +18,8 @@ export function addLiteRoutes(app: OpenAPIHono, deps: ServiceDeps) {
     return c.json({ ok: true });
   });
   app.get('/api/v1/projects/:id/context', async c => c.json(await getProjectContext(deps, projectId.parse(c.req.param('id')))));
-  app.post('/api/v1/projects/:id/sessions', async c => c.json(await saveProjectSession(deps, projectId.parse(c.req.param('id')), SessionInput.parse(await c.req.json()))));
-  app.post('/api/v1/projects/:id/consolidate', async c => c.json(await consolidateProject(deps, projectId.parse(c.req.param('id')))));
+  app.post('/api/v1/projects/:id/sessions', async c => c.json(await saveProjectSession(deps, projectId.parse(c.req.param('id')), SessionInput.parse(await c.req.json()), { waitForIndex: false })));
+  app.post('/api/v1/projects/:id/consolidate', async c => c.json(await startProjectConsolidation(deps, projectId.parse(c.req.param('id'))), 202));
   app.get('/api/v1/notifications', async c => {
     const result = await deps.db.query(`SELECT id, content, due_date, project_id FROM todos
       WHERE archived = false AND status <> 'done' AND due_date <= now() ORDER BY due_date`);

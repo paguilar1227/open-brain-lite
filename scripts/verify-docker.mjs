@@ -34,6 +34,18 @@ async function api(path, body, method = body === undefined ? 'GET' : 'POST') {
   return response.json();
 }
 
+async function connectPlugin() {
+  const client = new Client({ name: 'docker-plugin-acceptance', version: '1.0' });
+  await client.connect(new StdioClientTransport({ command: 'bash', args: ['plugin/scripts/mcp.sh'] }));
+  return client;
+}
+
+async function callPlugin(client, name, args) {
+  const result = await client.callTool({ name, arguments: args });
+  assert(!result.isError, JSON.stringify(result.content));
+  return JSON.parse(result.content[0].text);
+}
+
 async function ready(id) {
   let status;
   do {
@@ -80,11 +92,25 @@ if (phase === 'write') {
     await checkpoint({ check: 'local-file-extraction', file: fixture.filename, passed: true });
   }
 
-  const session = await api(`/projects/${project.id}/sessions`, { session_key: 'docker-acceptance',
-    summary: 'Local documents and a storage decision were captured. Restart validation is next.',
-    decisions: ['Persist PostgreSQL, files, and model weights in Docker volumes.'], next_steps: ['Verify state through a fresh plugin process after restarting every service.'] });
-  receipt.sessionId = session.id;
-  const memory = await api(`/projects/${project.id}/consolidate`, {});
+  const seedClient = await connectPlugin();
+  let job;
+  try {
+    const session = await callPlugin(seedClient, 'save_session', { project_id: project.id, session_key: 'docker-acceptance',
+      summary: 'Local documents and a storage decision were captured. Restart validation is next.',
+      decisions: ['Persist PostgreSQL, files, and model weights in Docker volumes.'], next_steps: ['Verify state through a fresh plugin process after restarting every service.'] });
+    receipt.sessionId = session.id;
+    job = await callPlugin(seedClient, 'consolidate_project', { project_id: project.id });
+  } finally { await seedClient.close(); }
+  await checkpoint({ check: 'consolidation-started-via-plugin', job: job.id, status: job.status });
+  let context;
+  do {
+    context = await api(`/projects/${project.id}/context`);
+    assert.equal(context.consolidation?.id, job.id, 'Consolidation was interrupted or replaced');
+    if (context.consolidation.status === 'running') await wait(1000);
+  } while (context.consolidation.status === 'running');
+  assert.equal(context.consolidation.status, 'completed', context.consolidation.error);
+  const memory = context.memory;
+  assert.equal(memory.id, context.consolidation.memory_id);
   assert(memory.summary.trim());
   assert.doesNotMatch(memory.summary, /lasagna|ricotta|parmesan/i);
   receipt.memoryId = memory.id;
@@ -120,8 +146,7 @@ await checkpoint({ check: `${phase}-global-and-project-search`, passed: true });
 
 // Execute the same shell entry point installed by the plugin. The Node bridge,
 // its SDK dependencies and API credential all come from the running container.
-const client = new Client({ name: 'docker-plugin-acceptance', version: '1.0' });
-await client.connect(new StdioClientTransport({ command: 'bash', args: ['plugin/scripts/mcp.sh'] }));
+const client = await connectPlugin();
 try {
   const tools = await client.listTools();
   for (const name of ['create', 'search', 'download', 'get_project_context', 'save_session', 'consolidate_project']) {

@@ -7,7 +7,7 @@ import { PGlite } from '@electric-sql/pglite';
 import { vector } from '@electric-sql/pglite-pgvector';
 import { uuid_ossp } from '@electric-sql/pglite/contrib/uuid_ossp';
 import { createProject } from '../../src/services/projects.js';
-import { consolidateProject, getProjectContext, saveProjectSession } from '../../src/services/project-memory.js';
+import { consolidateProject, getProjectContext, saveProjectSession, startProjectConsolidation } from '../../src/services/project-memory.js';
 import * as content from '../../src/services/content-items.js';
 import { createTodo } from '../../src/services/todos.js';
 import { findSimilarTodos, findTodosByLexical } from '../../src/db/todos.js';
@@ -114,6 +114,71 @@ describe('local PostgreSQL and durable project contract', () => {
     const saved = await consolidateProject(deps, project.id);
     const note = await pg.query<{ content: string }>('SELECT content FROM content_items WHERE id = $1', [saved.note_id]);
     expect(note.rows[0].content).toBe(saved.summary);
+  });
+
+  it('returns a consolidation job while the model is pending, deduplicates starts, and retains prior memory', async () => {
+    const project = await createProject(deps, 'Slow CPU handoff', null);
+    const previous = await consolidateProject(deps, project.id);
+    let finish!: (value: { content: string; tokensUsed: { input: number; output: number; total: number } }) => void;
+    const answer = new Promise<{ content: string; tokensUsed: { input: number; output: number; total: number } }>(resolve => { finish = resolve; });
+    const slow = { ...deps, ragFastLLM: { complete: vi.fn(() => answer) } };
+    const job = await startProjectConsolidation(slow, project.id);
+    expect(job.status).toBe('running');
+    expect(await startProjectConsolidation(slow, project.id)).toMatchObject({ id: job.id, status: 'running' });
+    expect((await getProjectContext(slow, project.id)).memory.id).toBe(previous.id);
+    finish({ content: '# Finished handoff', tokensUsed: { input: 1, output: 1, total: 2 } });
+    await vi.waitFor(async () => expect((await getProjectContext(slow, project.id)).consolidation?.status).toBe('completed'));
+    const context = await getProjectContext(slow, project.id);
+    expect(context.memory.summary).toBe('# Finished handoff');
+    expect(context.consolidation?.memory_id).toBe(context.memory.id);
+    expect(slow.ragFastLLM.complete).toHaveBeenCalledTimes(1);
+  });
+
+  it('exposes a failed consolidation job without replacing the last durable memory', async () => {
+    const project = await createProject(deps, 'Failed CPU handoff', null);
+    const previous = await consolidateProject(deps, project.id);
+    const failing = { ...deps, ragFastLLM: { complete: vi.fn().mockRejectedValue(new Error('Local model unavailable')) } };
+    await startProjectConsolidation(failing, project.id);
+    await vi.waitFor(async () => expect((await getProjectContext(failing, project.id)).consolidation?.status).toBe('failed'));
+    const context = await getProjectContext(failing, project.id);
+    expect(context.consolidation?.error).toBe('Local model unavailable');
+    expect(context.memory.id).toBe(previous.id);
+  });
+
+  it('commits a session before background indexing finishes', async () => {
+    const project = await createProject(deps, 'Slow session indexing', null);
+    let finish!: (value: { content: string; tokensUsed: { input: number; output: number; total: number } }) => void;
+    const answer = new Promise<{ content: string; tokensUsed: { input: number; output: number; total: number } }>(resolve => { finish = resolve; });
+    const slow = { ...deps, metadataLLM: { complete: vi.fn(() => answer) } };
+    const session = await saveProjectSession(slow, project.id, {
+      session_key: 'slow-index', summary: 'Preserve this handoff', decisions: [], next_steps: ['Continue tomorrow'],
+    }, { waitForIndex: false });
+    expect((await getProjectContext(slow, project.id)).sessions[0].id).toBe(session.id);
+    expect((await pg.query('SELECT content FROM content_items WHERE id = $1', [session.note_id])).rows[0].content).toContain('Continue tomorrow');
+    finish({ content: '{"title":"Session handoff","topics":[]}', tokensUsed: { input: 1, output: 1, total: 2 } });
+    await vi.waitFor(async () => expect((await pg.query('SELECT processing_status FROM content_items WHERE id = $1', [session.note_id])).rows[0].processing_status).toBe('ready'));
+  });
+
+  it('handles an embedding failure while background metadata is still pending', async () => {
+    const project = await createProject(deps, 'Embedding fails before metadata', null);
+    let finish!: (value: { content: string; tokensUsed: { input: number; output: number; total: number } }) => void;
+    const metadata = new Promise<{ content: string; tokensUsed: { input: number; output: number; total: number } }>(resolve => { finish = resolve; });
+    const faulty = { ...deps, metadataLLM: { complete: vi.fn(() => metadata) },
+      embeddingProvider: { dimensions: 768, embed: vi.fn().mockRejectedValue(new Error('Embedding service unavailable')) } };
+    const session = await saveProjectSession(faulty, project.id, {
+      session_key: 'failed-index', summary: 'Keep these durable facts', decisions: [], next_steps: [],
+    }, { waitForIndex: false });
+    try {
+      await vi.waitFor(async () => {
+        const note = (await pg.query('SELECT processing_status, processing_error, content FROM content_items WHERE id = $1', [session.note_id])).rows[0];
+        expect(note.processing_status).toBe('failed');
+        expect(note.processing_error).toContain('Embedding service unavailable');
+        expect(note.content).toContain('Keep these durable facts');
+      });
+      expect((await getProjectContext(faulty, project.id)).sessions[0].id).toBe(session.id);
+    } finally {
+      finish({ content: '{"title":"Delayed metadata","topics":[]}', tokensUsed: { input: 1, output: 1, total: 2 } });
+    }
   });
 
   it('applies project scope before limiting both lexical and vector todo results', async () => {

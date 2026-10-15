@@ -331,7 +331,10 @@ async function runIngestTailImpl(
         });
     }
 
-    const metadata = await metadataPromise;
+    // Attach rejection handlers to both parallel operations immediately. Waiting
+    // for metadata first leaves a fast embedding failure unhandled until the
+    // (potentially much slower) model call finishes.
+    const [metadata, earlyChunkEmbeddings] = await Promise.all([metadataPromise, earlyChunkEmbedsPromise]);
     recordStage(trace, 'metadata.title', metadata.title);
     recordStage(trace, 'metadata.extracted_text', metadata.extracted_text);
     if (isEchoOf(trace.stages['metadata.extracted_text'] ?? null, trace.stages['input.content'] ?? null)) {
@@ -401,9 +404,9 @@ async function runIngestTailImpl(
     if (fullText) {
       let textChunks: string[];
       let embeddings: number[][];
-      if (earlyChunkEmbedsPromise && earlyTextChunks) {
+      if (earlyChunkEmbeddings && earlyTextChunks) {
         textChunks = earlyTextChunks;
-        embeddings = await earlyChunkEmbedsPromise;
+        embeddings = earlyChunkEmbeddings;
       } else {
         textChunks = chunkText(fullText);
         console.log(`[content] Split into ${textChunks.length} text chunk(s) — total tokens ~${approximateTokens(fullText)}`);
