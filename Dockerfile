@@ -23,6 +23,7 @@ RUN npm run build --workspace=open-brain-backend
 
 COPY frontend/ ./frontend/
 RUN npm run build --workspace=open-brain-frontend
+RUN npm prune --omit=dev --ignore-scripts
 
 # ---------- Runtime ----------
 FROM node:22-bookworm-slim AS runner

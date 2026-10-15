@@ -4,7 +4,7 @@ import { createMcpServer } from '../../../src/mcp/server.js';
 import type { ServiceDeps } from '../../../src/services/index.js';
 
 function mockDeps(): ServiceDeps {
-  return {
+  const deps: ServiceDeps = {
     db: {
       query: vi.fn().mockResolvedValue({ rows: [] }),
       pool: {} as any,
@@ -69,7 +69,8 @@ function mockDeps(): ServiceDeps {
       getReadSasUrl: vi.fn((u: string) => u),
     },
     config: { apiKey: 'test' } as any,
-  };
+  };  vi.mocked(deps.db.transaction).mockImplementation(async (fn: any) => fn({ query: deps.db.query }));
+  return deps;
 }
 
 async function callMcp(
@@ -405,8 +406,7 @@ describe('MCP server', () => {
     expect(chunksDeleted).toBeDefined();
     const statusReset = sqlCalls.find(
       (q) => /UPDATE\s+content_items/i.test(q.sql)
-        && /processing_status/i.test(q.sql)
-        && q.params[0] === 'pending',
+        && /processing_status\s*=\s*'pending'/i.test(q.sql),
     );
     expect(statusReset).toBeDefined();
   });

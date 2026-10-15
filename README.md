@@ -69,6 +69,6 @@ npm test
 npm run test:frontend
 ```
 
-The tests use mocks for providers and require no real account keys. Production builds run the real configured local provider; stub mode is only for tests or explicit UI development.
+Provider tests use mocks and require no real account keys. The local-database tests execute the migrations, pgvector searches, rollback behavior, and disk reopen against embedded PostgreSQL (PGlite); Docker acceptance remains a separate check. Production builds run the real configured local provider; stub mode is only for tests or explicit UI development.
 
 Current work remains in progress: real Docker/model/mobile validation, completion-provider sign-in verification, local media/URL extraction verification, and the final independent acceptance pass. Do not treat passing mock-based tests as proof of those integrations.

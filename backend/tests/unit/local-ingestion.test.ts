@@ -29,3 +29,18 @@ describe('local-first source preservation', () => {
     expect(insert[1]?.[3]).toBe(source);
   });
 });
+
+describe('failed ingest source metadata', () => {
+  it('keeps the filename required to identify the file on retry', async () => {
+    const db = mockDb();
+    vi.mocked(db.query).mockImplementation(async (sql: string) => ({ rows: sql.startsWith('INSERT INTO content_items') ? [{ id: 'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa' }] : [], rowCount: 1 }) as any);
+    const llm = mockLLMProvider({ content: '{"title":"A document","topics":[]}' });
+    const embedding = mockEmbeddingProvider(768);
+    embedding.embed = vi.fn().mockRejectedValue(new Error('embedding offline'));
+    const deps = { db, blobStorage: mockBlobStorage(), embeddingProvider: embedding, metadataLLM: llm, mediaMetadataLLM: llm, config: { llmProvider: 'ollama' } } as ServiceDeps;
+    const pending = await createContentItem(deps, { type: 'document', file: { filename: 'notes.txt', mimeType: 'application/octet-stream', data: Buffer.from('Saved original text that needs an extension to identify.') } });
+    expect((await pending.completion).status).toBe('failed');
+    const metadataWrites = vi.mocked(db.query).mock.calls.filter(([sql]) => sql.includes('metadata =')).flatMap(([, params]) => params ?? []).filter(value => typeof value === 'string' && value.startsWith('{')).map(value => JSON.parse(value as string));
+    expect(metadataWrites.at(-1).filename).toBe('notes.txt');
+  });
+});

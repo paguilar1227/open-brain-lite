@@ -7,7 +7,7 @@ import { createApp } from '../../src/app.js';
 import type { ServiceDeps } from '../../src/services/index.js';
 
 function mockDeps(): ServiceDeps {
-  return {
+  const deps: ServiceDeps = {
     db: {
       query: vi.fn(),
       pool: {} as any,
@@ -58,7 +58,8 @@ function mockDeps(): ServiceDeps {
       getReadSasUrl: vi.fn((u: string) => u),
     },
     config: { apiKey: 'test-key' } as any,
-  };
+  };  vi.mocked(deps.db.transaction).mockImplementation(async (fn: any) => fn({ query: deps.db.query }));
+  return deps;
 }
 
 const AUTH = { 'Authorization': 'Bearer test-key' };
@@ -424,9 +425,8 @@ describe('Content items API', () => {
 
     const statusReset = queries.find(
       (q) => /UPDATE\s+content_items/i.test(q.sql)
-        && /processing_status\s*=\s*\$1/.test(q.sql)
-        && q.params[0] === 'pending'
-        && q.params[2] === fakeId,
+        && /processing_status\s*=\s*'pending'/.test(q.sql)
+        && q.params[0] === fakeId,
     );
     expect(statusReset).toBeDefined();
   });
@@ -637,8 +637,7 @@ describe('Content items API', () => {
     expect(chunksDeleted).toBeDefined();
     const statusReset = queries.find(
       (q) => /UPDATE\s+content_items/i.test(q.sql)
-        && /processing_status\s*=\s*\$1/.test(q.sql)
-        && q.params[0] === 'pending',
+        && /processing_status\s*=\s*'pending'/.test(q.sql),
     );
     expect(statusReset).toBeDefined();
   });
@@ -939,9 +938,8 @@ describe('Content items API', () => {
     expect(chunksDeleted).toBeDefined();
     const statusReset = queries.find(
       (q) => /UPDATE\s+content_items/i.test(q.sql)
-        && /processing_status\s*=\s*\$1/.test(q.sql)
-        && q.params[0] === 'pending'
-        && q.params[2] === fakeId,
+        && /processing_status\s*=\s*'pending'/.test(q.sql)
+        && q.params[0] === fakeId,
     );
     expect(statusReset).toBeDefined();
   });

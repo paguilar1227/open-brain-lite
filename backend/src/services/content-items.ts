@@ -1,3 +1,4 @@
+import { beginContentReindex } from '../db/reindex.js';
 import { extractLocalFile } from '../capture/local-file.js';
 import { createHash } from 'crypto';
 import type { ServiceDeps } from './index.js';
@@ -177,12 +178,6 @@ async function createContentItemImpl(
     }
   }
 
-  if (input.file && deps.config.llmProvider !== 'real' && deps.config.llmProvider !== 'stub') {
-    const extracted = await extractLocalFile(input.file);
-    if (extracted !== null) pdfText = extracted;
-    if (!pdfText?.trim() && !input.content?.trim()) throw new Error('No extractable text found. Add a transcript or text description.');
-  }
-
   // Prelude step 4: early row insert with placeholder title + status='pending'.
   // The id returned to REST callers is the id of this row; the async tail
   // updates the row in place with real metadata when it finishes.
@@ -278,6 +273,12 @@ async function runIngestTailImpl(
   const warnings: string[] = [];
 
   try {
+    // Keep local OCR/transcription in the async tail: the upload is already durable and has an id.
+    if (input.file && deps.config.llmProvider !== 'real' && deps.config.llmProvider !== 'stub') {
+      const extracted = await extractLocalFile(input.file);
+      if (extracted !== null) pdfText = extracted;
+      if (!pdfText?.trim() && !input.content?.trim()) throw new Error('No extractable text found. Add a transcript or text description.');
+    }
     // Metadata extraction setup — same routing as before.
     const filesForMeta = pdfText === null && input.file
       ? [{ data: input.file.data, mimeType: input.file.mimeType }]
@@ -482,6 +483,7 @@ async function runIngestTailImpl(
       await dbUpdate(deps.db, contentItemId, {
         metadata: {
           ingest_trace: trace,
+          filename: input.file?.filename,
           ...(input.replacesId ? { replaces: input.replacesId } : {}),
         },
       });
@@ -675,12 +677,8 @@ async function rerunIngestTail(
     trace,
   };
 
-  // All source preflight succeeded. Only now retire the old index.
-  await deleteChunksByContentItem(deps.db, id);
-
-  // Reset to pending. updateProcessingStatus also clears ingest_completed_at
-  // via its CASE expression, so the polling endpoint reports a fresh start.
-  await updateProcessingStatus(deps.db, id, 'pending', null);
+  // Source preflight succeeded. Commit pending state and old-index retirement together.
+  await beginContentReindex(deps.db, id);
 
   console.log(`[${mode}] Re-running ingest tail for ${row.type} ${id}`);
 
@@ -765,9 +763,7 @@ export async function editContentBody(
 
   // Persist the new body up front so any caller polling /status sees it.
   // Reset to pending and clear chunks so the tail starts from a clean slate.
-  await dbUpdate(deps.db, id, { content: newContent });
-  await deleteChunksByContentItem(deps.db, id);
-  await updateProcessingStatus(deps.db, id, 'pending', null);
+  await beginContentReindex(deps.db, id, newContent);
 
   console.log(`[edit-body] Re-chunking + re-embedding ${row.type} ${id} (${newContent.length} chars)`);
 
