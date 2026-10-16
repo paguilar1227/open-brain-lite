@@ -1,7 +1,7 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { join } from 'node:path';
 import { createRequire } from 'node:module';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, readFile, writeFile, rename } from 'node:fs/promises';
 import type { Config } from '../config.js';
 import { providerEnvironment } from './environment.js';
 type Provider = 'copilot' | 'chatgpt';
@@ -17,6 +17,7 @@ export class ProviderLogin {
   async start(provider: Provider) {
     if (this.states.get(provider)?.status === 'running') return this.status(provider);
     await mkdir(join(this.config.authDir, provider === 'chatgpt' ? 'codex' : 'copilot'), { recursive: true });
+    const env = providerEnvironment(this.config.authDir, provider);
     let command: string;
     let args: string[];
     if (provider === 'chatgpt') {
@@ -26,9 +27,18 @@ export class ProviderLogin {
     } else {
       // The SDK runtime serves inference; device sign-in belongs to the official CLI.
       command = process.execPath;
-      args = [require.resolve('@github/copilot/npm-loader.js'), '--no-auto-update', 'login', '--device-code'];
+      const cli = require.resolve('@github/copilot/npm-loader.js');
+      // This installation persists credentials in its private Docker volume.
+      // A headless CLI cannot prompt to accept file storage when no OS keychain exists.
+      const settingsPath = join(env.COPILOT_HOME, 'settings.json');
+      let settings: Record<string, unknown> = {};
+      try { settings = JSON.parse(await readFile(settingsPath, 'utf8')); }
+      catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+      if (!settings || typeof settings !== 'object' || Array.isArray(settings)) throw new Error('Copilot settings must be a JSON object.');
+      await writeFile(`${settingsPath}.tmp`, JSON.stringify({ ...settings, storeTokenPlaintext: true }), { mode: 0o600 });
+      await rename(`${settingsPath}.tmp`, settingsPath);
+      args = [cli, '--no-auto-update', 'login', '--device-code'];
     }
-    const env = providerEnvironment(this.config.authDir, provider);
     const child = spawn(command, args, { env, stdio: ['ignore', 'pipe', 'pipe'] });
     const state: LoginState = { status: 'running', child };
     this.states.set(provider, state);
