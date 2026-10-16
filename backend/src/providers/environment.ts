@@ -16,8 +16,13 @@ export function providerEnvironment(authDir: string, provider: 'copilot' | 'chat
   env.COPILOT_HOME = join(authDir, 'copilot');
   env.COPILOT_DISABLE_KEYTAR = '1';
   env.GH_CONFIG_DIR = join(authDir, 'github-cli');
-  // Copilot otherwise probes `gh` from PATH even with an empty baseDirectory.
-  // Its bundled runtime is launched by absolute path and needs no host tools.
-  if (provider === 'copilot') env.PATH = '';
+  // Copilot otherwise probes host CLI accounts and cached runtime packages.
+  // Both login and inference use this installation-owned profile and cache.
+  if (provider === 'copilot') {
+    env.HOME = env.COPILOT_HOME;
+    env.USERPROFILE = env.COPILOT_HOME;
+    env.XDG_CACHE_HOME = join(env.COPILOT_HOME, '.cache');
+    env.PATH = '';
+  }
   return env;
 }

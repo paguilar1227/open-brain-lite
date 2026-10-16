@@ -10,10 +10,16 @@ describe('installation-owned provider environments', () => {
     expect(env).toMatchObject({ CODEX_HOME: '/installation/auth/codex', COPILOT_HOME: '/installation/auth/copilot', COPILOT_DISABLE_KEYTAR: '1', PATH: '' });
   });
   it('keeps platform and network settings without changing the parent environment', () => {
+    vi.stubEnv('HOME', '/host-home');
     vi.stubEnv('PATH', '/parent/bin');
     vi.stubEnv('HTTPS_PROXY', 'http://proxy.example');
     expect(providerEnvironment('/installation/auth', 'chatgpt')).toMatchObject({ PATH: '/parent/bin', HTTPS_PROXY: 'http://proxy.example' });
     expect(providerEnvironment('/installation/auth', 'copilot').PATH).toBe('');
     expect(process.env.PATH).toBe('/parent/bin');
+    expect(providerEnvironment('/installation/auth', 'copilot')).toMatchObject({
+      HOME: '/installation/auth/copilot', USERPROFILE: '/installation/auth/copilot',
+      XDG_CACHE_HOME: '/installation/auth/copilot/.cache',
+    });
+    expect(process.env.HOME).toBe('/host-home');
   });
 });

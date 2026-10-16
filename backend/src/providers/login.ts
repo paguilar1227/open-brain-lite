@@ -24,11 +24,9 @@ export class ProviderLogin {
       const cli = require.resolve('@openai/codex/bin/codex.js');
       args = [cli, 'login', '--device-auth'];
     } else {
-      // Runtime API is pinned with the SDK dependency. No global CLI/auth state is used.
-      const entry = import.meta.resolve('@github/copilot-sdk');
-      const runtime = await import(new URL('./runtimeArtifacts.js', entry).href);
-      command = await runtime.ensureRuntimeBundle('1.0.98');
-      args = ['login', '--device-code'];
+      // The SDK runtime serves inference; device sign-in belongs to the official CLI.
+      command = process.execPath;
+      args = [require.resolve('@github/copilot/npm-loader.js'), '--no-auto-update', 'login', '--device-code'];
     }
     const env = providerEnvironment(this.config.authDir, provider);
     const child = spawn(command, args, { env, stdio: ['ignore', 'pipe', 'pipe'] });
