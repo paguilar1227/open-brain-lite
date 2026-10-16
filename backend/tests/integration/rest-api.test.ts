@@ -2699,6 +2699,34 @@ describe('Search API', () => {
     expect(deps.queryDepthLLM.complete).toHaveBeenCalledOnce();
   });
 
+  it.each(['ollama', 'llama.cpp', 'copilot', 'chatgpt'])('local search retrieves scoped hits without waiting for %s completion', async (provider) => {
+    deps.config.storageProvider = 'local';
+    deps.config.llmProvider = provider as typeof deps.config.llmProvider;
+    const projectId = '11111111-1111-4111-8111-111111111111';
+    const queries: Array<{ sql: string; params: unknown[] }> = [];
+    vi.mocked(deps.queryDepthLLM.complete).mockRejectedValue(new Error('Completion is unavailable'));
+    vi.mocked(deps.db.query).mockImplementation(async (sql: string, params?: unknown[]) => {
+      queries.push({ sql, params: params ?? [] });
+      return { rows: sql.includes('FROM chunks c') ? [{
+        id: 'chunk-1', content_item_id: 'note-1', chunk_index: 0, chunk_type: 'text',
+        content: 'Project decisions use PostgreSQL.', metadata: {}, created_at: new Date(), similarity: 0.8,
+        parent_type: 'note', parent_title: 'Storage', parent_project_ids: [projectId], parent_tags: [],
+      }] : [] } as any;
+    });
+
+    const res = await app.fetch(new Request('http://localhost/api/v1/search', {
+      method: 'POST', headers: { ...AUTH, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: 'Where are project decisions stored?', project_id: projectId }),
+    }));
+
+    expect(res.status).toBe(200);
+    expect((await res.json()).hits.some((hit: any) => hit.chunk?.content_item_id === 'note-1')).toBe(true);
+    expect(deps.queryDepthLLM.complete).not.toHaveBeenCalled();
+    expect(deps.embeddingProvider.embed).toHaveBeenCalled();
+    expect(queries.some(q => q.sql.includes('embedding <=>') && q.params.includes(projectId))).toBe(true);
+    expect(queries.some(q => q.sql.includes('chunk_entities'))).toBe(true);
+  });
+
   it('skips the classifier when graph is explicitly disabled (F1)', async () => {
     vi.mocked(deps.db.query).mockResolvedValue({ rows: [] } as any);
 

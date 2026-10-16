@@ -1484,12 +1484,12 @@ export function createApp(deps: ServiceDeps) {
     async (c) => {
       const body = c.req.valid('json');
 
-      // Default graph:true. When on, extract named entities from the query
-      // via the same classifier the RAG path uses so expansion can seed
-      // from the question itself (not just the vector-seed chunks).
+      // Cloud mode may seed graph expansion by classifying the query. Local
+      // search uses entities from retrieved chunks: waiting for completion
+      // here can exceed client deadlines on CPU and is not needed for retrieval.
       const graphEnabled = body.graph !== false;
       let queryEntities: Array<{ name: string; type: 'person' | 'org' | 'concept' | 'tool' | 'paper' }> = [];
-      if (graphEnabled) {
+      if (graphEnabled && deps.config.storageProvider !== 'local') {
         const classification = await classifyQueryDepth(deps, body.query);
         queryEntities = classification.entities;
       }

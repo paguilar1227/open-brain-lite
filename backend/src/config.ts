@@ -33,7 +33,7 @@ const configSchema = z.object({
   llamaModel: z.string().default('local-model'),
   authDir: z.string().default('/data/auth'),
   copilotModel: z.string().default('gpt-5-mini'),
-  chatgptModel: z.string().default('gpt-5.4-mini'),
+  chatgptModel: z.string().default('gpt-6-luna'),
   storageProvider: z.enum(['local', 'azure']).default('local'),
 });
 
