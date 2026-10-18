@@ -1,3 +1,4 @@
+import { onHostEvent } from '../lib/host';
 // Generic typeahead popover anchored under an input. The parent owns
 // the items list (filtering / sourcing per sigil), the popover handles
 // just rendering, mouse hover, click selection, and Escape dismiss.
@@ -58,11 +59,11 @@ export function TypeaheadPopover({
   // onKeyDown (we can't intercept here without stealing focus from input).
   useEffect(() => {
     const onDown = (e: MouseEvent) => {
-      if (popRef.current?.contains(e.target as Node)) return;
+      if (e.composedPath().includes(popRef.current!)) return;
       onDismiss();
     };
-    document.addEventListener('mousedown', onDown);
-    return () => document.removeEventListener('mousedown', onDown);
+    const stopDown = onHostEvent('mousedown', onDown);
+    return () => stopDown();
   }, [onDismiss]);
 
   // Keep the active row visible when the parent moves activeIndex via

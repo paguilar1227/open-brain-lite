@@ -1,6 +1,6 @@
 import { addLiteRoutes } from './lite-routes.js';
 import { LocalFileStorage } from './storage/local.js';
-import { Hono } from 'hono';
+import { Hono, type MiddlewareHandler } from 'hono';
 import { OpenAPIHono, createRoute, z } from '@hono/zod-openapi';
 import {
   ActivityListQuerySchema,
@@ -12,6 +12,7 @@ import {
   ContentEditBodyRequestSchema,
   ContentGetResponseSchema,
   ContentIngestAckSchema,
+  UuidSchema,
   ContentItemSchema,
   ContentListQuerySchema,
   ContentListResponseSchema,
@@ -104,74 +105,47 @@ export function createApp(deps: ServiceDeps) {
     },
   });
 
-  app.use('*', cors({ origin: '*' }));
+  const localAccess = deps.config.storageProvider === 'local';
+  // Local installations are keyless. A foreign website must not read or
+  // mutate the local workspace through the user's browser.
+  const sameOrigin = (origin: string, url: string) => {
+    try { return new URL(origin).origin === new URL(url).origin; }
+    catch { return false; }
+  };
+  app.onError((error,c) => {
+    if (error instanceof z.ZodError) return c.json({error:error.issues.map(i=>i.message).join('; ')},400);
+    if ('code' in error && ['23503','23514','23505'].includes(String(error.code))) return c.json({error:error.message},400);
+    console.error(error);
+    return c.json({error:'Internal server error'},500);
+  });
+  app.use('*', async (c, next) => {
+    const origin = c.req.header('Origin');
+    if (localAccess && origin && !sameOrigin(origin, c.req.url)) {
+      return c.json({ error: 'Cross-origin access is not allowed' }, 403);
+    }
+    await next();
+  });
+  app.use('*', cors({ origin: localAccess ? (origin, c) => sameOrigin(origin, c.req.url) ? origin : '' : '*' }));
 
-  // ----- auth -----
-  // /api/v1/* and /api/openapi.json + /api/docs use Bearer (Authorization
-  // header or `?key=`). All non-browser callers (MCP, CLI, scripts, the
-  // OpenAPI/Swagger viewer with `?key=`) hit this surface.
-  //
-  // /api/auth/* is intentionally NOT covered by this middleware — those
-  // endpoints sit in front of Easy Auth and read the
-  // `x-ms-client-principal-*` headers Easy Auth injects on authenticated
-  // browser requests. Easy Auth's `excludedPaths` covers `/api/v1/*` and
-  // `/api/openapi.json` + `/api/docs` so Bearer callers aren't redirected
-  // to login, but `/api/auth/*` is gated so the principal headers are
-  // actually injected when a valid session cookie is present.
-  app.use('/api/v1/*', async (c, next) => {
+  const requireAccess: MiddlewareHandler = async (c, next) => {
     const key = c.req.header('Authorization')?.replace('Bearer ', '') ?? c.req.query('key');
-    if (key !== deps.config.apiKey) {
+    if (!localAccess && (!deps.config.apiKey || key !== deps.config.apiKey)) {
       return c.json({ error: 'Unauthorized' }, 401);
     }
     await next();
-  });
-  app.use('/api/openapi.json', async (c, next) => {
-    const key = c.req.header('Authorization')?.replace('Bearer ', '') ?? c.req.query('key');
-    if (key !== deps.config.apiKey) {
-      return c.json({ error: 'Unauthorized' }, 401);
-    }
-    await next();
-  });
-  app.use('/api/docs', async (c, next) => {
-    const key = c.req.header('Authorization')?.replace('Bearer ', '') ?? c.req.query('key');
-    if (key !== deps.config.apiKey) {
-      return c.json({ error: 'Unauthorized' }, 401);
-    }
-    await next();
-  });
-  // /mcp uses the same Bearer / ?key= contract as /api/v1/*. The endpoint
-  // is wired up with `app.all('/mcp', ...)` further down; this middleware
-  // gates it before the handler ever spins up an MCP server. Match-by-path
-  // here means we don't accidentally protect the entire app with `*`.
-  app.use('/mcp', async (c, next) => {
-    const key = c.req.header('Authorization')?.replace('Bearer ', '') ?? c.req.query('key');
-    if (key !== deps.config.apiKey) {
-      return c.json({ error: 'Unauthorized' }, 401);
-    }
-    await next();
-  });
+  };
+  for (const path of ['/api/v1/*', '/api/openapi.json', '/api/docs', '/mcp']) {
+    app.use(path, requireAccess);
+  }
 
-  // /api/auth/token: the React UI calls this on boot to exchange its Easy
-  // Auth session cookie for the long-lived Bearer key the rest of the
-  // /api/v1 surface expects. Easy Auth gates this endpoint (it isn't in
-  // excludedPaths), so by the time the request reaches us the platform has
-  // already validated the cookie and injected the principal headers.
-  // Anonymous browser sessions get a 302 to the AAD login flow before
-  // ever reaching this code.
-  //
-  // Note: this returns the same long-lived key today — option 3 phase 1.
-  // Phase 2 will derive a short-lived per-session token (see task #122).
-  app.get('/api/auth/token', (c) => {
-    return c.json({ error: 'Enter the API key from your local installation' }, 401);
-
-  });
+  app.get('/api/auth/token', (c) => c.json({ error: 'Use a configured workspace API key' }, 401));
 
   app.get('/api/files/:name', async (c) => {
     const storage = deps.blobStorage;
     if (!(storage instanceof LocalFileStorage)) return c.json({ error: 'Not found' }, 404);
     const name = c.req.param('name');
     const filename = c.req.query('filename') ?? '';
-    const authorized = c.req.header('Authorization') === `Bearer ${deps.config.apiKey}`
+    const authorized = localAccess || c.req.header('Authorization') === `Bearer ${deps.config.apiKey}`
       || storage.verify(name, c.req.query('expires') ?? '', filename, c.req.query('sig') ?? '');
     if (!authorized) return c.json({ error: 'Unauthorized' }, 401);
     try {
@@ -200,7 +174,7 @@ export function createApp(deps: ServiceDeps) {
       description:
         'Personal knowledge base + productivity tool. Single user (Pablo). ' +
         'Hybrid semantic + entity-graph search across documents, notes, and todos. ' +
-        'Auth: `Authorization: Bearer <key>` or `?key=<key>` query param.',
+        (localAccess ? 'Local workspace: no API key required.' : 'Auth: `Authorization: Bearer <key>` or `?key=<key>` query param.'),
     },
     servers: [
       { url: '/', description: 'Current host' },
@@ -483,6 +457,7 @@ export function createApp(deps: ServiceDeps) {
       // project-less rows.
       const items = await contentSvc.listContentItems(deps, {
         type: q.type,
+        session_id: q.session_id,
         project_id: q.project_id === 'null' ? null : q.project_id,
         tags,
         processing_status,
@@ -516,6 +491,7 @@ export function createApp(deps: ServiceDeps) {
                 title: z.string().optional(),
                 project_ids: z.string().optional(),
                 tags: z.string().optional(),
+                deduplicate: z.enum(['true', 'false']).optional(),
                 file: z.unknown().optional(),
               }),
             },
@@ -535,15 +511,20 @@ export function createApp(deps: ServiceDeps) {
       let content: string | undefined;
       let title: string | undefined;
       let projectIds: string[] | undefined;
+      let sessionId: string | null | undefined;
       let tags: string[] | undefined;
       let folder: string | null | undefined;
+      let deduplicate = true;
       let file: { data: Buffer; mimeType: string; filename: string } | undefined;
 
       if (contentType.includes('multipart/form-data')) {
         const body = await c.req.parseBody();
+        if (body.deduplicate !== undefined && body.deduplicate !== 'true' && body.deduplicate !== 'false') return c.json({ error: 'deduplicate must be true or false' }, 400);
+        deduplicate = body.deduplicate !== 'false';
         type = body.type as 'document' | 'note';
         content = typeof body.content === 'string' ? body.content : undefined;
         title = typeof body.title === 'string' ? body.title : undefined;
+        sessionId = typeof body.session_id === 'string' ? UuidSchema.parse(body.session_id) : undefined;
         const pids = typeof body.project_ids === 'string' ? body.project_ids : undefined;
         projectIds = pids ? pids.split(',').filter(Boolean) : undefined;
         const tgs = typeof body.tags === 'string' ? body.tags : undefined;
@@ -562,7 +543,8 @@ export function createApp(deps: ServiceDeps) {
           type: 'document' | 'note';
           content?: string;
           title?: string;
-          project_ids?: string[];
+          session_id?: string | null;
+        project_ids?: string[];
           tags?: string[];
           folder?: string | null;
         }>();
@@ -570,6 +552,7 @@ export function createApp(deps: ServiceDeps) {
         content = body.content;
         title = body.title;
         projectIds = body.project_ids;
+        sessionId = body.session_id;
         tags = body.tags;
         folder = body.folder ?? undefined;
       }
@@ -582,7 +565,7 @@ export function createApp(deps: ServiceDeps) {
       }
 
       const started = await contentSvc.createContentItem(deps, {
-        type, content, title, projectIds, tags, folder, file,
+        type, content, title, projectIds, sessionId, tags, folder, file, skipDedup: !deduplicate,
       });
       return c.json(
         { id: started.id, status: started.status },
@@ -612,6 +595,7 @@ export function createApp(deps: ServiceDeps) {
       try {
         const result = await urlIngestSvc.ingestFromUrl(deps, body.url, {
           projectIds: body.project_ids,
+          sessionId: body.session_id,
           tags: body.tags,
           title: body.title,
         });
@@ -762,6 +746,7 @@ export function createApp(deps: ServiceDeps) {
       const body = await c.req.json<{
         title?: string;
         content?: string;
+        session_id?: string | null;
         project_ids?: string[];
         tags?: string[];
         folder?: string | null;
@@ -774,6 +759,7 @@ export function createApp(deps: ServiceDeps) {
       const item = await contentSvc.updateContentItem(deps, id, {
         title: body.title,
         projectIds: body.project_ids,
+        sessionId: body.session_id,
         tags: body.tags,
         folder: body.folder,
       });
@@ -1065,6 +1051,7 @@ export function createApp(deps: ServiceDeps) {
       }
 
       const todos = await todosSvc.listTodos(deps, {
+        session_id: q.session_id,
         project_id: q.project_id === 'null' ? null : q.project_id ?? undefined,
         parent_id,
         status: q.status,
@@ -1100,6 +1087,7 @@ export function createApp(deps: ServiceDeps) {
       try {
         const todo = await todosSvc.createTodo(deps, {
           content: body.content,
+          sessionId: body.session_id,
           projectId: body.project_id ?? null,
           section: body.section ?? null,
           parentId: body.parent_id ?? null,
@@ -1162,6 +1150,7 @@ export function createApp(deps: ServiceDeps) {
       try {
         const todo = await todosSvc.updateTodo(deps, id, {
           content: body.content,
+          sessionId: body.session_id,
           projectId: body.project_id === null ? null : body.project_id,
           // Distinguish "clear to Ungrouped" (null) from "don't touch"
           // (undefined) — `?? undefined` collapsed null and silently dropped
@@ -1497,6 +1486,7 @@ export function createApp(deps: ServiceDeps) {
       // Translate the wire-level 'null' sentinel into the internal `null`
       // the search service understands — same shape as /content list uses.
       const hits = await searchSvc.search(deps, body.query, {
+        sessionId: body.session_id,
         projectId: body.project_id === 'null' ? null : body.project_id,
         entityTypes: body.entity_types,
         tags: body.tags,
@@ -1677,6 +1667,7 @@ export function createApp(deps: ServiceDeps) {
       const body = c.req.valid('json');
       const result = await searchSvc.findMentions(deps, body.entity, {
         type: body.type,
+        sessionId: body.session_id,
         projectId: body.project_id,
         limit: body.limit ?? 20,
       });
@@ -1700,6 +1691,7 @@ export function createApp(deps: ServiceDeps) {
     async (c) => {
       const body = c.req.valid('json');
       const result = await ragSvc.ragQuery(deps, body.question, {
+        sessionId: body.session_id,
         projectId: body.project_id,
         tags: body.tags,
         entityTypes: body.entity_types,

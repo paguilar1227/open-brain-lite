@@ -30,7 +30,7 @@ export function SearchResultsList({ hits, onOpen }: Props) {
       containerRef.current?.querySelectorAll<HTMLButtonElement>('button.search-hit-title') ?? [],
     );
     if (!buttons.length) return;
-    const activeIdx = buttons.findIndex((b) => b === document.activeElement);
+    const activeIdx = buttons.findIndex((b) => b === e.target);
     if (e.key === 'ArrowDown') {
       e.preventDefault();
       const next = activeIdx < 0 ? 0 : Math.min(buttons.length - 1, activeIdx + 1);

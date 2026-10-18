@@ -12,6 +12,7 @@ export interface SearchOptions {
   //   string  = single project scope
   //   null    = personal scope (no project membership)
   //   undef   = global scope (everything)
+  sessionId?: string;
   projectId?: string | null;
   entityTypes?: Array<'document' | 'note' | 'todo'>;
   tags?: string[];
@@ -113,7 +114,7 @@ async function searchWithTimingsImpl(
   const stubMode = deps.config.llmProvider === 'stub';
   const defaultThreshold = stubMode ? 0.05 : deps.config.llmProvider === 'real' ? 0.65 : -1;
   const {
-    projectId, entityTypes, tags, tagMatch, limit = 10, threshold = defaultThreshold,
+    sessionId, projectId, entityTypes, tags, tagMatch, limit = 10, threshold = defaultThreshold,
     queryEntities = [], graph = true,
     contentItemIds, excludedTags, excludedEntityTypes, excludedContentItemIds,
   } = opts;
@@ -142,7 +143,7 @@ async function searchWithTimingsImpl(
     || !!tags?.length || !!excludedTags?.length
     || !!entityTypes?.length || !!excludedEntityTypes?.length
     || !!contentItemIds?.length || !!excludedContentItemIds?.length
-    || projectId !== undefined;
+    || projectId !== undefined || sessionId !== undefined;
   console.log(`[search] query: "${query.slice(0, 80)}", project: ${projectId ?? 'global'}, types: ${entityTypes?.join(',') ?? 'all'}, graph: ${graph}, filter-only: ${!hasQueryText}`);
   if (!hasAnySignal) {
     const totalMs = Math.round(performance.now() - totalStart);
@@ -160,7 +161,7 @@ async function searchWithTimingsImpl(
 
   const dbStart = performance.now();
   const chunkFilterOpts = {
-    projectId,
+    projectId, sessionId,
     parentType: entityTypes && entityTypes.length === 1
       ? (entityTypes[0] === 'document' || entityTypes[0] === 'note' ? entityTypes[0] : undefined)
       : undefined,
@@ -176,7 +177,7 @@ async function searchWithTimingsImpl(
   // (entity_types restriction, projectId scope, etc.), tell the helper to
   // proceed with a filter-only listing instead of short-circuiting.
   const todoFilterOpts = {
-    projectId,
+    projectId, sessionId,
     tags,
     tagMatch,
     excludedTags,
@@ -275,6 +276,7 @@ async function searchWithTimingsImpl(
           "ci.processing_status = 'ready'",
         ];
         const paramsList: unknown[] = [expandedChunkIds];
+        if (sessionId) { paramsList.push(sessionId); conditions.push(`ci.session_id = $${paramsList.length}`); }
         if (projectId === null) {
           conditions.push('cardinality(ci.project_ids) = 0');
         } else if (typeof projectId === 'string') {
@@ -505,7 +507,7 @@ export interface FindMentionsResult {
 export async function findMentions(
   deps: ServiceDeps,
   entityName: string,
-  opts: { type?: EntityType; projectId?: string; limit?: number } = {},
+  opts: { type?: EntityType; projectId?: string; sessionId?: string; limit?: number } = {},
 ): Promise<FindMentionsResult> {
   const limit = opts.limit ?? 20;
 
@@ -534,6 +536,8 @@ export async function findMentions(
   const projFilter = opts.projectId ? `AND $2::uuid = ANY(ci.project_ids)` : ``;
   const params: unknown[] = [matched.id];
   if (opts.projectId) params.push(opts.projectId);
+  const sessionFilter=opts.sessionId ? `AND ci.session_id=$${params.length+1}::uuid` : '';
+  if(opts.sessionId) params.push(opts.sessionId);
 
   const res = await deps.db.query(
     `SELECT ce.chunk_id, c.content_item_id, ci.title AS parent_title, ci.type AS parent_type,
@@ -545,6 +549,7 @@ export async function findMentions(
       WHERE ce.entity_id = $1
         AND ci.archived = false
         ${projFilter}
+        ${sessionFilter}
       ORDER BY ce.confidence DESC
       LIMIT ${limit}`,
     params,

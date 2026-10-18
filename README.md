@@ -14,7 +14,7 @@ cd open-brain-lite
 ./scripts/setup.sh
 ```
 
-Open port `3210` on the serving machine. Sign in with the installation API key in `.env`. The generated key is never baked into the frontend. The default listener is loopback; remote access requires deliberately configuring a bind address or HTTPS reverse proxy. Use HTTPS for browser notifications on phones.
+Open port `3210` on the serving machine. The local workspace opens directly; no installation API key or login is required. The default listener is loopback; remote access requires deliberately configuring a bind address or HTTPS reverse proxy. Use HTTPS for browser notifications on phones.
 
 ```sh
 docker compose stop       # preserve all data
@@ -24,6 +24,8 @@ docker compose stop       # preserve all data
 Do not remove Docker volumes unless you intend to erase the installation. Back up the `database` and `files` volumes together; `models` can be downloaded again. `.env` contains installation secrets and is gitignored.
 
 ## Models
+
+When no provider preference has been saved or explicitly set in the environment, startup and successful Copilot sign-in check the installation’s authentication and live model catalog. If Claude Sonnet 5.5 is enabled, it becomes the completion default; otherwise the app keeps local Ollama. Embeddings remain local. Saving model settings makes that choice explicit and disables automatic selection; a selected provider’s request failures never trigger a silent fallback.
 
 - **Default embedding:** Ollama `embeddinggemma`, 768 dimensions. A small [300M-parameter retrieval model](https://ollama.com/library/embeddinggemma) suited to a personal corpus.
 - **Default completion/consolidation:** Ollama `qwen3.5:4b`, with thinking disabled for structured extraction and ordinary retrieval. [Qwen 3.5](https://ollama.com/library/qwen3.5) is a small multimodal model; the 4B weight download is approximately 3.3–4.0 GB. Compose packages the checksum-pinned official Ollama `0.40.4` release with its CPU components, excluding unused GPU runtimes, and disables cloud execution. Older runtimes can reject this model. Native Ollama can also be selected with `OLLAMA_URL` for hardware acceleration; setup prepares and verifies the models on that endpoint using the persisted model choice. The CPU acceptance runner took 39.2 seconds for three embeddings and a short structured completion; substantial handoffs can take several minutes and run as background jobs.
@@ -50,12 +52,12 @@ Workflow:
 4. `save_session` stores factual progress, decisions, and next steps, idempotently by project + session key. Session records and their source notes commit together before acknowledgment; search indexing runs in the background. Retries also repair older unlinked handoffs.
 5. `consolidate_project` starts a versioned, source-backed handoff and returns a job immediately. Poll `get_project_context` for `consolidation.status`: `running`, `completed`, or `failed`. State synthesis uses explicit project notes, sessions, and tasks. Documents appear in a labeled reference inventory and remain searchable/retrievable; record adopted document facts in a note or session decision to include them as project state. Previous summaries and source records remain available. Each summary and its searchable source note commit together before indexing. A job interrupted by a server restart can be started again; completed memories remain in the database.
 
-The HTTP MCP endpoint is `/mcp` with Bearer authentication. The plugin's stdio bridge reads this checkout's `.env`, so secrets do not need to be copied into MCP configuration.
+The local HTTP MCP endpoint is `/mcp` and requires no API key. The stdio bridge connects automatically. Cloud deployments retain Bearer authentication.
 
 ## UI and data
 
 - Reuses v2's component-based projects, notes, folders, document readers, todo hierarchy, comments, archive, pinning, tagging, search syntax, and mobile navigation.
-- `frontend/src/theme.css` overrides semantic tokens. Future Refero themes can change this layer without rewriting feature components. Fonts load locally from the system.
+- `frontend/src/theme.css` applies Software Kitchen’s Mono Drafting light and dark themes: the same palette, flat controls, sharp corners, Inter, and Geist Mono. Fonts are bundled locally; no font service is contacted. Light is the fresh-install default, and your selection persists per browser.
 - Settings includes provider selection and opt-in browser notifications for due todos. Overlapping reminder checks are deduplicated, and disabling reminders stops pending delivery. Reminders require a supported secure browser origin and an open app; closed-browser Web Push is not implemented.
 - The Memory tab tracks background consolidation, survives a page reload while the job runs, and displays failures without discarding the previous handoff. Local model requests do not use Node fetch's fixed five-minute response-header deadline.
 - Text, Markdown, DOCX, text PDFs, and image OCR have local extraction paths. Audio and video use local Whisper (base/int8); YouTube URLs use a single original-language yt-dlp caption track or local transcription. Public X URLs save the referenced post text directly from X's public embed endpoint; whole threads and attached media are not captured. HTML imports use local Readability parsing. Protected or unsupported sources fail explicitly. Whisper weights download on first transcription and remain in the data volume.
@@ -77,7 +79,7 @@ Browser regression checks run against an explicitly started, isolated installati
 
 ```sh
 npm run test:e2e:install --workspace=open-brain-frontend
-OPEN_BRAIN_API_KEY=your-test-installation-key npm run test:e2e -- 'lite-contract|settings'
+npm run test:e2e -- 'lite-contract|settings'
 ```
 
 The checks create and clean up their own records. The memory cases require a local completion provider. The remaining inherited v2 browser suite requires its original seed fixtures; it is not evidence of Lite acceptance by itself.
@@ -89,3 +91,18 @@ Verified so far: build, 361 backend tests, 85 frontend tests, 3 Python media tes
 The final [Docker CPU acceptance run](https://github.com/paguilar1227/open-brain-lite/actions/runs/38792885923) passed on application revision `de38b64`: setup, real-model verification, text/PNG/PDF/WAV ingestion, source-backed consolidation, global/project search, all 25 plugin tools being available, and file/model/settings/session recovery after container recreation. The receipt verifies original-file hashes and exact handoff fields through a fresh plugin client. Its handoff also passed the reference-provenance regression and was inspected manually.
 
 The local Docker installation also passed setup on the Apple M1 Pro after approved build-cache cleanup. Its first CPU model check took 213 seconds, including model startup; GPU-accelerated native Ollama remains an optional configuration. Both subscription providers completed device sign-in and returned the expected PostgreSQL JSON through the app adapters after container recreation. Copilot took 4.8 seconds and ChatGPT 3.9 seconds in that probe. Local project notes, session decisions, open work, global/project search, and all 25 MCP tools also survived the local restart checks. Full X-thread/media capture is outside the remaining scope. Physical-phone HTTPS notifications remain unverified; desktop and emulated-mobile browser notification checks passed.
+
+
+### Session workspaces
+
+Sessions hold their own notes, documents/uploads, todos and timeline. A session can belong to one project or remain standalone. Project search includes its direct content and all child sessions; global search includes standalone sessions. Existing project content stays where it was, and existing handoffs keep their IDs and source notes.
+
+Open **Sessions** in navigation or a project's **Sessions** tab. Create a session, add content, and use its search scope selector or searchable/tag-filtered timeline. **Manage session** can rename or move the workspace. Deleting requires typing its name and permanently removes its owned content, files and timeline. A failed file cleanup remains queued and is retried by repeating the same session DELETE request.
+
+A project's timeline combines direct project events and all child-session events in one chronology. Its tag menu is the distinct union across that history: a shared name such as `front-end` appears once and matches every included source. The **AND / OR** toggle defaults to AND (every selected tag); OR matches any selected tag, and no selection shows all events. REST and MCP accept the same `tag_match: all | any` option. Event cards identify their session or show **Project-level**. A session's timeline and tag menu remain local to that session; search and pagination do not shrink the available tag inventory.
+
+MCP clients use `list_sessions`, `create_session`, `get_session_context`, `update_session`, `delete_session`, `session_timeline`, and `project_timeline`. Pass `session_id` to content/todo writes, lists, search and questions. Keep a stable `session_key` when creating/resuming; `save_session` also accepts the session UUID. See the bundled `plugin/skills/open-brain-lite/SKILL.md` for the complete workflow.
+
+The agent interface also supports file upload/download/replacement, pins, all list filters, todo ordering and comments, bulk operations, tag maintenance, inventory, due reminders, and provider/model settings and device login. Permanent deletion requires explicit confirmation arguments (the current session name or exact record IDs); archive/restore remains available for reversible removal. Settings and device-login state are shared with the UI. Browser-local theme and browser notification permission remain in the browser. `backend/tests/integration/mcp-workspace-parity.test.ts` checks every server-backed UI route has a tool and exercises workflows through the real HTTP MCP transport with an isolated database and mock inference.
+
+Session workspaces require migration `013_session_workspaces.sql`, after timeline migration `012_project_timeline.sql`. Back up and approve these migrations before upgrading an existing installation.

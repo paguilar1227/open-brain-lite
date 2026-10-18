@@ -34,7 +34,7 @@ export function Sidebar({ route, onRoute, onAction, collapsed, onToggleCollapsed
     <aside className="sidebar">
       <div className="sb-brand">
         <div className="logo">
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="white" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
             <path d="M5 3.5c-1.4 0-2.5 1.1-2.5 2.5 0 .5.2 1 .5 1.4-.6.4-1 1.1-1 1.9 0 1.2.9 2.2 2 2.4M5 3.5c.6-.6 1.4-1 2.3-1 1 0 1.9.5 2.4 1.3M5 3.5v9.4M11 3.5c1.4 0 2.5 1.1 2.5 2.5 0 .5-.2 1-.5 1.4.6.4 1 1.1 1 1.9 0 1.2-.9 2.2-2 2.4M11 3.5c-.6-.6-1.4-1-2.3-1M11 3.5v9.4M5 13c.6.6 1.4 1 2.3 1 1.4 0 2.5-1.1 2.5-2.5M11 13c-.6.6-1.4 1-2.3 1" />
           </svg>
         </div>
@@ -72,6 +72,7 @@ export function Sidebar({ route, onRoute, onAction, collapsed, onToggleCollapsed
         <span className="label">Projects</span>
         <span className="count">{projects.length}</span>
       </div>
+      <button type="button" className={cls('sb-item', (isRoute('sessions')||isRoute('session')) && 'active')} onClick={()=>onRoute({route:'sessions'})}><span className="ic"><Icons.Layers /></span><span className="label">Sessions</span></button>
       <div className={cls('sb-item', isRoute('activity') && 'active')} onClick={() => onRoute({ route: 'activity' })}>
         <span className="ic"><Icons.Activity /></span>
         <span className="label">Activity</span>
@@ -116,15 +117,16 @@ export function Sidebar({ route, onRoute, onAction, collapsed, onToggleCollapsed
 
       <button
         type="button"
-        className="sb-footer"
-        onClick={() => onAction({ kind: 'settings' })}
+        className={cls('sb-footer', isRoute('settings') && 'active')}
+        onClick={() => onRoute({ route: 'settings' })}
+        aria-current={isRoute('settings') ? 'page' : undefined}
         title="Settings"
         aria-label="Settings"
       >
         <span className="sb-avatar">OB</span>
         <span className="sb-user">
-          <span className="nm">Local workspace</span>
-          <span className="em">Stored on this machine</span>
+          <span className="nm">Settings</span>
+          <span className="em">Models &amp; preferences</span>
         </span>
         <span className="sb-cog" aria-hidden="true">
           <Icons.Cog />

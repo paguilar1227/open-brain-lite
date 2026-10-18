@@ -4,9 +4,11 @@ import { existsSync, readFileSync } from 'node:fs';
 import { mkdir, writeFile, rename } from 'node:fs/promises';
 import { dirname } from 'node:path';
 
+export const DEFAULT_COPILOT_MODEL = 'claude-sonnet-5.5';
+
 const configSchema = z.object({
   databaseUrl: z.string().min(1),
-  apiKey: z.string().min(1),
+  apiKey: z.string().default(''),
   azureStorageConnectionString: z.string().default(''),
   azureStorageContainer: z.string().default('open-brain'),
   geminiApiKey: z.string(),
@@ -32,9 +34,14 @@ const configSchema = z.object({
   llamaUrl: z.string().default('http://host.docker.internal:8080/v1'),
   llamaModel: z.string().default('local-model'),
   authDir: z.string().default('/data/auth'),
-  copilotModel: z.string().default('gpt-5-mini'),
+  copilotModel: z.string().default(DEFAULT_COPILOT_MODEL),
+  autoSelectCopilot: z.boolean().default(false),
   chatgptModel: z.string().default('gpt-6-luna'),
   storageProvider: z.enum(['local', 'azure']).default('local'),
+}).superRefine((config, ctx) => {
+  if (config.storageProvider !== 'local' && !config.apiKey) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['apiKey'], message: 'API key is required for cloud storage' });
+  }
 });
 
 export type Config = z.infer<typeof configSchema>;
@@ -48,6 +55,10 @@ export function loadConfig(): Config {
 
   const settingsPath = process.env.SETTINGS_PATH || '/data/settings.json';
   const saved = existsSync(settingsPath) ? JSON.parse(readFileSync(settingsPath, 'utf8')) : {};
+  const explicitCompletionChoice = ['provider', 'localModel', 'llamaUrl', 'llamaModel', 'copilotModel', 'chatgptModel']
+    .some(key => saved[key] != null)
+    || ['LLM_PROVIDER', 'LOCAL_MODEL', 'LLAMA_URL', 'LLAMA_MODEL', 'COPILOT_MODEL', 'CHATGPT_MODEL']
+      .some(key => Boolean(process.env[key]));
   return configSchema.parse({
     databaseUrl: process.env.DATABASE_URL,
     apiKey: process.env.OPEN_BRAIN_API_KEY,
@@ -66,15 +77,16 @@ export function loadConfig(): Config {
     nodeEnv: process.env.NODE_ENV || 'development',
     timezone: process.env.TIMEZONE || 'America/Chicago',
     llmProvider: saved.provider ?? llmProvider,
+    autoSelectCopilot: !explicitCompletionChoice,
     settingsPath,
-    llamaUrl: saved.llamaUrl ?? process.env.LLAMA_URL,
-    llamaModel: saved.llamaModel ?? process.env.LLAMA_MODEL,
+    llamaUrl: saved.llamaUrl ?? (process.env.LLAMA_URL || undefined),
+    llamaModel: saved.llamaModel ?? (process.env.LLAMA_MODEL || undefined),
     authDir: process.env.AUTH_DIR,
-    copilotModel: saved.copilotModel ?? process.env.COPILOT_MODEL,
-    chatgptModel: saved.chatgptModel ?? process.env.CHATGPT_MODEL,
+    copilotModel: saved.copilotModel ?? (process.env.COPILOT_MODEL || undefined),
+    chatgptModel: saved.chatgptModel ?? (process.env.CHATGPT_MODEL || undefined),
     ollamaUrl: process.env.OLLAMA_URL,
     embeddingModel: process.env.EMBEDDING_MODEL,
-    localModel: saved.localModel ?? process.env.LOCAL_MODEL,
+    localModel: saved.localModel ?? (process.env.LOCAL_MODEL || undefined),
     filesDir: process.env.FILES_DIR,
     storageProvider: process.env.STORAGE_PROVIDER,
   });
@@ -85,5 +97,5 @@ export async function saveRuntimeConfig(config: Config, values: { provider: 'oll
   const temp = `${config.settingsPath}.tmp`;
   await writeFile(temp, JSON.stringify(values), { mode: 0o600 });
   await rename(temp, config.settingsPath);
-  Object.assign(config, { llmProvider: values.provider, localModel: values.localModel, copilotModel: values.copilotModel, chatgptModel: values.chatgptModel, llamaUrl: values.llamaUrl, llamaModel: values.llamaModel });
+  Object.assign(config, { autoSelectCopilot: false, llmProvider: values.provider, localModel: values.localModel, copilotModel: values.copilotModel, chatgptModel: values.chatgptModel, llamaUrl: values.llamaUrl, llamaModel: values.llamaModel });
 }

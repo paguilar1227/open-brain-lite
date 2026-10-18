@@ -75,6 +75,7 @@ export function MobileTabbar({ route, onRoute, onAction }: Props) {
               <button className={cls('m-sheet-row', route.route === 'todos' && 'active')} onClick={() => go({ route: 'todos' })}>
                 <span className="ic"><Icons.Check /></span><span>Todos</span>
               </button>
+              <button type="button" className="m-sheet-row" onClick={()=>go({route:'sessions'})}><span className="ic"><Icons.Layers /></span><span>Sessions</span></button>
               <button className={cls('m-sheet-row', route.route === 'activity' && 'active')} onClick={() => go({ route: 'activity' })}>
                 <span className="ic"><Icons.Activity /></span><span>Activity</span>
               </button>
@@ -105,14 +106,14 @@ export function MobileTabbar({ route, onRoute, onAction }: Props) {
                 className="m-sheet-row"
                 onClick={() => {
                   setMoreOpen(false);
-                  onAction({ kind: 'settings' });
+                  onRoute({ route: 'settings' });
                 }}
               >
                 <span className="ic"><Icons.Cog /></span>
-                <span>Account &amp; preferences</span>
+                <span>Models &amp; preferences</span>
                 <span className="sub">›</span>
               </button>
-              <button className="m-sheet-row" onClick={() => { setMoreOpen(false); onAction({ kind: 'settings' }); }}>
+              <button className="m-sheet-row" onClick={() => { setMoreOpen(false); onRoute({ route: 'settings' }); }}>
                 <span className="ic"><Icons.Inbox /></span><span>Notifications</span><span className="sub">›</span>
               </button>
               <button className="m-sheet-row">

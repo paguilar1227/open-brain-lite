@@ -2,9 +2,10 @@ import { EventEmitter } from 'node:events';
 import { beforeEach, expect, it, vi } from 'vitest';
 import type { Config } from '../../../src/config.js';
 
-const mock = vi.hoisted(() => ({ mkdir: vi.fn(), spawn: vi.fn(), readFile: vi.fn(), writeFile: vi.fn(), rename: vi.fn() }));
+const mock = vi.hoisted(() => ({ mkdir: vi.fn(), spawn: vi.fn(), readFile: vi.fn(), writeFile: vi.fn(), rename: vi.fn(), selectDefault: vi.fn() }));
 vi.mock('node:fs/promises', () => ({ mkdir: mock.mkdir, readFile: mock.readFile, writeFile: mock.writeFile, rename: mock.rename }));
 vi.mock('node:child_process', () => ({ spawn: mock.spawn }));
+vi.mock('../../../src/providers/subscription.js', () => ({ trySelectCopilotDefault: mock.selectDefault }));
 import { ProviderLogin } from '../../../src/providers/login.js';
 
 beforeEach(() => {
@@ -56,4 +57,17 @@ it('preserves existing Copilot settings when enabling installation file storage'
   mock.spawn.mockReturnValue(Object.assign(new EventEmitter(), { stdout: new EventEmitter(), stderr: new EventEmitter() }));
   await new ProviderLogin({ authDir: '/installation/auth' } as Config).start('copilot');
   expect(JSON.parse(mock.writeFile.mock.calls[0][1])).toEqual({ theme: 'dark', storeTokenPlaintext: true });
+});
+
+it('checks the default model after successful first-time Copilot sign-in', async () => {
+  const child = Object.assign(new EventEmitter(), { stdout: new EventEmitter(), stderr: new EventEmitter() });
+  mock.spawn.mockReturnValue(child);
+  mock.selectDefault.mockResolvedValue(true);
+  const config = { authDir: '/installation/auth', autoSelectCopilot: true } as Config;
+  const login = new ProviderLogin(config);
+  await login.start('copilot');
+  child.emit('exit', 0);
+  await vi.waitFor(() => expect(login.status('copilot').status).toBe('succeeded'));
+  expect(mock.selectDefault).toHaveBeenCalledWith(config);
+  expect(login.status('copilot').message).toContain('Sonnet 5.5');
 });

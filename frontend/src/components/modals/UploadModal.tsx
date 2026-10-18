@@ -19,7 +19,7 @@ function fmtBytes(n: number): string {
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export function UploadModal({ project, onClose }: { project: Project | null; onClose: () => void }) {
+export function UploadModal({ project, sessionId, onClose }: { sessionId?: string; project: Project | null; onClose: () => void }) {
   const qc = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [queue, setQueue] = useState<Queued[]>([]);
@@ -36,6 +36,8 @@ export function UploadModal({ project, onClose }: { project: Project | null; onC
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['content'] });
+    qc.invalidateQueries({ queryKey: ['sessions'] });
+    qc.invalidateQueries({ queryKey: ['session-timeline'] });
     qc.invalidateQueries({ queryKey: ['project-counts'] });
     qc.invalidateQueries({ queryKey: ['stats'] });
     qc.invalidateQueries({ queryKey: ['activity'] });
@@ -43,11 +45,11 @@ export function UploadModal({ project, onClose }: { project: Project | null; onC
 
   const fileMut = useMutation({
     mutationFn: ({ item, tags }: { item: Extract<Queued, { kind: 'file' }>; tags: string[] }) =>
-      uploadFile({ file: item.file, projectIds, tags: tags.length ? tags : undefined }),
+      uploadFile({ file: item.file, projectIds, sessionId, tags: tags.length ? tags : undefined }),
   });
   const urlMut = useMutation({
     mutationFn: ({ item, tags }: { item: Extract<Queued, { kind: 'url' }>; tags: string[] }) =>
-      saveFromUrl({ url: item.url, projectIds, tags: tags.length ? tags : undefined }),
+      saveFromUrl({ url: item.url, projectIds, sessionId, tags: tags.length ? tags : undefined }),
   });
 
   const setStatus = (id: string, patch: Partial<Queued>) => {

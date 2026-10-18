@@ -13,6 +13,7 @@ export interface ContentItemInsert {
   mimeType: string | null;
   fileHash: string | null;
   projectIds: string[];
+  sessionId?: string | null;
   tags: string[];
   folder?: string | null;             // single hierarchical folder path, or null when unfiled
   embedding: number[] | null;
@@ -32,6 +33,7 @@ export interface ContentItemRow {
   mime_type: string | null;
   file_hash: string | null;
   project_ids: string[];
+  session_id?: string | null;
   tags: string[];
   folder: string | null;
   embedding: number[] | null;
@@ -68,6 +70,7 @@ export interface ListContentItemsFilters {
   // `null` matches rows with no project membership at all (personal scope —
   // mirrors the equivalent on todos.project_id); `undefined` does no filter.
   project_id?: string | null;
+  session_id?: string;
   tags?: string[];                   // AND semantics: all tags must be present
   processing_status?: ProcessingStatus[]; // OR semantics: row must match any
   pinned?: boolean;                  // true = only pinned, false = only not pinned, undefined = no filter
@@ -91,8 +94,8 @@ export async function insertContentItem(
     `INSERT INTO content_items
        (type, title, title_source, content, blob_url, mime_type, file_hash,
         project_ids, tags, folder, embedding, metadata, source_url, published_at,
-        processing_status)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+        processing_status, session_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
      RETURNING id`,
     [
       item.type, item.title, item.titleSource, item.content, item.blobUrl,
@@ -103,6 +106,7 @@ export async function insertContentItem(
       item.sourceUrl,
       item.publishedAt,
       item.processingStatus ?? 'ready',
+      item.sessionId ?? null,
     ],
   );
   return result.rows[0];
@@ -165,6 +169,7 @@ export async function listContentItems(
 
   if (!filters.include_archived) conditions.push('archived = false');
   if (filters.type) { conditions.push(`type = $${i++}`); params.push(filters.type); }
+  if (filters.session_id) { conditions.push(`session_id = $${i++}`); params.push(filters.session_id); }
   if (filters.project_id === null) {
     // Personal scope — rows with no project membership. project_ids is a
     // NOT NULL array column, so "no project" means an empty array. Index
@@ -228,22 +233,22 @@ export async function getContentItemById(db: DbClient, id: string): Promise<Cont
   return result.rows[0] ?? null;
 }
 
-export async function findByFileHash(db: DbClient, hash: string): Promise<ContentItemRow | null> {
+export async function findByFileHash(db: DbClient, hash: string, sessionId?: string | null): Promise<ContentItemRow | null> {
   // Note: dedup intentionally finds rows in any processing_status — a 'pending'
   // row from an in-flight ingest should still match so the second caller polls
   // the same id rather than starting a duplicate pipeline.
   const result = await db.query(
-    `SELECT * FROM content_items WHERE file_hash = $1 AND archived = false LIMIT 1`,
-    [hash],
+    `SELECT * FROM content_items WHERE file_hash = $1 AND session_id IS NOT DISTINCT FROM $2::uuid AND archived = false LIMIT 1`,
+    [hash, sessionId ?? null],
   );
   return result.rows[0] ?? null;
 }
 
 /** Dedup lookup for URL-sourced content. Matches rows in any processing_status. */
-export async function findByUrl(db: DbClient, url: string): Promise<ContentItemRow | null> {
+export async function findByUrl(db: DbClient, url: string, sessionId?: string | null): Promise<ContentItemRow | null> {
   const result = await db.query(
-    `SELECT * FROM content_items WHERE source_url = $1 AND archived = false LIMIT 1`,
-    [url],
+    `SELECT * FROM content_items WHERE source_url = $1 AND session_id IS NOT DISTINCT FROM $2::uuid AND archived = false LIMIT 1`,
+    [url, sessionId ?? null],
   );
   return result.rows[0] ?? null;
 }
@@ -260,7 +265,7 @@ export async function updateContentItem(
   const map: Record<string, string> = {
     title: 'title', titleSource: 'title_source', content: 'content',
     blobUrl: 'blob_url', mimeType: 'mime_type', fileHash: 'file_hash',
-    projectIds: 'project_ids', tags: 'tags', folder: 'folder', sourceUrl: 'source_url',
+    sessionId: 'session_id', projectIds: 'project_ids', tags: 'tags', folder: 'folder', sourceUrl: 'source_url',
     publishedAt: 'published_at',
   };
 

@@ -16,6 +16,7 @@ const NEW_NOTE_TITLE_PLACEHOLDER = 'Untitled note';
 interface Props {
   note: Note | null;
   projectId?: string;
+  sessionId?: string;
   /** Folder to file a NEW note into (the Notes view passes its selected
    *  folder so the new note lands where the user is browsing). Edit ignores it. */
   initialFolder?: string | null;
@@ -33,7 +34,7 @@ function tagsScopeFor(note: Note | null, defaultProjectId?: string): { project_i
   return { scope: 'all' };
 }
 
-export function NoteEditorModal({ note, projectId, initialFolder, onClose }: Props) {
+export function NoteEditorModal({ note, projectId, sessionId, initialFolder, onClose }: Props) {
   const isNew = !note;
   const [body, setBody] = useState(note?.body ?? NEW_NOTE_BODY_PLACEHOLDER);
   const [title, setTitle] = useState(note?.title ?? NEW_NOTE_TITLE_PLACEHOLDER);
@@ -53,6 +54,8 @@ export function NoteEditorModal({ note, projectId, initialFolder, onClose }: Pro
 
   const invalidateAll = () => {
     qc.invalidateQueries({ queryKey: ['content'] });
+    qc.invalidateQueries({ queryKey: ['sessions'] });
+    qc.invalidateQueries({ queryKey: ['session-timeline'] });
     qc.invalidateQueries({ queryKey: ['project-counts'] });
     qc.invalidateQueries({ queryKey: ['stats'] });
     qc.invalidateQueries({ queryKey: ['activity'] });
@@ -66,6 +69,7 @@ export function NoteEditorModal({ note, projectId, initialFolder, onClose }: Pro
     mutationFn: (finalTags: string[]) =>
       createNote({
         type: 'note',
+        session_id: sessionId,
         title: title.trim() || 'Untitled note',
         content: body,
         project_ids: projectId ? [projectId] : [],

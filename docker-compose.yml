@@ -30,17 +30,21 @@ services:
       NODE_ENV: production
       PORT: 3000
       DATABASE_URL: postgres://openbrain:${POSTGRES_PASSWORD}@db:5432/openbrain
-      OPEN_BRAIN_API_KEY: ${OPEN_BRAIN_API_KEY:?Run ./scripts/setup.sh first}
+      OPEN_BRAIN_API_KEY: ${OPEN_BRAIN_API_KEY:-}
       STORAGE_PROVIDER: local
       FILES_DIR: /data/files
       AUTH_DIR: /data/auth
       SETTINGS_PATH: /data/settings.json
       CODEX_HOME: /data/auth/codex
       COPILOT_HOME: /data/auth/copilot
-      LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
+      LLM_PROVIDER: ${LLM_PROVIDER:-}
       OLLAMA_URL: ${OLLAMA_URL:-http://ollama:11434}
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-embeddinggemma}
-      LOCAL_MODEL: ${LOCAL_MODEL:-qwen3.5:4b}
+      LOCAL_MODEL: ${LOCAL_MODEL:-}
+      COPILOT_MODEL: ${COPILOT_MODEL:-}
+      CHATGPT_MODEL: ${CHATGPT_MODEL:-}
+      LLAMA_MODEL: ${LLAMA_MODEL:-}
+      LLAMA_URL: ${LLAMA_URL:-}
       TIMEZONE: ${TIMEZONE:-America/Chicago}
     volumes:
       - files:/data

@@ -117,6 +117,8 @@ export function CommandPalette({ onClose, onRoute, onAction, onToggleTheme, them
       { kind: 'action', id: 'go-home', title: 'Go to Home', sub: 'shortcut · G then H', icon: <Icons.Home size={13} />, action: () => onRoute({ route: 'home' }) },
       { kind: 'action', id: 'go-activity', title: 'Go to Activity', sub: 'shortcut · G then A', icon: <Icons.Activity size={13} />, action: () => onRoute({ route: 'activity' }) },
       { kind: 'action', id: 'go-tags', title: 'Go to Tags', sub: 'shortcut · G then T', icon: <Icons.Tag size={13} />, action: () => onRoute({ route: 'tags' }) },
+      { kind: 'action', id: 'go-sessions', title: 'Open Sessions', sub: 'notes, todos, artifacts and history', icon: <Icons.Layers size={13} />, action: () => onRoute({ route: 'sessions' }) },
+      { kind: 'action', id: 'go-settings', title: 'Open Settings', sub: 'models, appearance, and notifications', icon: <Icons.Cog size={13} />, action: () => onRoute({ route: 'settings' }) },
       { kind: 'action', id: 'toggle-theme', title: `Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`, sub: 'shortcut · ⌘⇧L', icon: <Icons.Moon size={13} />, action: () => onToggleTheme() },
     ];
     const filt = (xs: PaletteItem[]) =>

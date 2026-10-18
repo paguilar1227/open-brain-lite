@@ -108,6 +108,7 @@ export async function findChunksByLexical(
   query: string,
   limit: number = 10,
   opts: {
+    sessionId?: string;
     projectId?: string | null;
     parentType?: 'document' | 'note';
     tags?: string[];
@@ -127,7 +128,7 @@ export async function findChunksByLexical(
     !!opts.tags?.length || !!opts.contentItemIds?.length ||
     !!opts.excludedTags?.length || !!opts.excludedContentItemIds?.length ||
     !!opts.excludedParentTypes?.length || !!opts.parentType ||
-    opts.projectId !== undefined;
+    opts.projectId !== undefined || opts.sessionId !== undefined;
   if (!hasText && !hasAnyFilter) return [];
   // Escape ILIKE metachars in user input so '100%' searches literally for '100%'.
   // When hasText is false, the pattern is `%%` which trivially matches; the
@@ -146,6 +147,7 @@ export async function findChunksByLexical(
   }
   const params: unknown[] = [pattern, limit];
   let i = 3;
+  if (opts.sessionId) { conditions.push(`ci.session_id = $${i++}`); params.push(opts.sessionId); }
   if (opts.projectId === null) {
     conditions.push('cardinality(ci.project_ids) = 0');
   } else if (opts.projectId !== undefined) {
@@ -217,6 +219,7 @@ export async function findSimilarChunks(
   //   null    → chunks whose parent has no project membership (personal)
   //   undef   → no filter (global)
   opts: {
+    sessionId?: string;
     projectId?: string | null;
     parentType?: 'document' | 'note';
     tags?: string[];
@@ -236,6 +239,7 @@ export async function findSimilarChunks(
   const params: unknown[] = [JSON.stringify(embedding), threshold, limit];
   let i = 4;
 
+  if (opts.sessionId) { conditions.push(`ci.session_id = $${i++}`); params.push(opts.sessionId); }
   if (opts.projectId === null) {
     conditions.push('cardinality(ci.project_ids) = 0');
   } else if (opts.projectId !== undefined) {

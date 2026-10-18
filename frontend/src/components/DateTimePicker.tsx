@@ -1,3 +1,4 @@
+import { onHostEvent } from '../lib/host';
 // Hand-rolled date+time picker. Replaces <input type="datetime-local">
 // because the native popup is browser-styled and impossible to reconcile
 // with the rest of the UI.
@@ -144,9 +145,8 @@ export function DateTimePicker({ value, onChange, disabled }: Props) {
   useEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent) => {
-      const target = e.target as Node;
-      if (popRef.current?.contains(target)) return;
-      if (triggerRef.current?.contains(target)) return;
+      if (e.composedPath().includes(popRef.current!)) return;
+      if (e.composedPath().includes(triggerRef.current!)) return;
       setOpen(false);
     };
     const onKey = (e: KeyboardEvent) => {
@@ -156,11 +156,11 @@ export function DateTimePicker({ value, onChange, disabled }: Props) {
         triggerRef.current?.focus();
       }
     };
-    document.addEventListener('mousedown', onDown);
-    document.addEventListener('keydown', onKey);
+    const stopDown = onHostEvent('mousedown', onDown);
+    const stopKey = onHostEvent('keydown', onKey);
     return () => {
-      document.removeEventListener('mousedown', onDown);
-      document.removeEventListener('keydown', onKey);
+      stopDown();
+      stopKey();
     };
   }, [open]);
 

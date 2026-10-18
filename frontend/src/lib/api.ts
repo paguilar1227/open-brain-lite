@@ -3,17 +3,8 @@
 // Typed fetch client for the Open Brain REST API. All responses are validated
 // against shared Zod schemas (`@open-brain/shared`) — bad data fails loud.
 //
-// Auth: dual-mode.
-//   - Local dev: VITE_OPEN_BRAIN_API_KEY → Bearer header; matches the
-//     backend's stub-mode key out of the box.
-//   - Production: same Bearer header is sent (with the placeholder fallback,
-//     which the backend rejects), but the request also carries the Easy
-//     Auth session cookie (`credentials: 'include'`). The backend's
-//     `/api/*` middleware accepts EITHER signal, so the placeholder Bearer
-//     is harmless and the cookie+principal-header path is what actually
-//     authenticates browser calls in prod.
-
 import {
+  SessionSchema, type Session, SessionCreateSchema, SessionUpdateSchema,
   ActivityListQuerySchema,
   ActivityListResponseSchema,
   ContentGetResponseSchema,
@@ -73,47 +64,53 @@ import {
   type Todo,
   type TodoComment,
   type TodoListQuery,
+  TimelineResponseSchema,
+  type TimelineCursor,
+  type TimelineResponse,
+  type TimelineTagMatch,
 } from '@open-brain/shared';
 import { z } from 'zod';
+import { apiBase, resourceUrl } from './host';
 
-const BASE = '/api/v1';
+
 const TOKEN_STORAGE_KEY = 'ob.api_key';
 
-// Resolve the Bearer key the UI uses for /api/v1/* calls. Two sources:
-//   - Local dev: `VITE_OPEN_BRAIN_API_KEY` from the build env (matches the
-//     backend's stub-mode default).
-//   - Production: the `/api/auth/token` exchange, which sits behind Easy
-//     Auth — the platform has already validated the user's cookie session
-//     by the time that endpoint runs, and the response carries the long-
-//     lived Bearer key plus the Entra principal id/name. We cache it in
-//     localStorage so the next page load skips the round-trip.
-//
-// `bootAuth()` is called once before React mounts (see main.tsx). If the
-// session has expired, the fetch comes back as an opaque redirect and we
-// hard-navigate to the AAD login URL with `post_login_redirect_uri` set
-// to the current page so the user lands back where they were.
+export function listProjectTimeline(projectId: string, search: string, cursor: TimelineCursor | null, signal?: AbortSignal, tags: string[] = [], tagMatch: TimelineTagMatch = 'all'): Promise<TimelineResponse> {
+  const params = new URLSearchParams({ search, tag_match: tagMatch });
+  tags.forEach(tag => params.append('tag', tag));
+  if (cursor) { params.set('before_at', cursor.at); params.set('before_id', cursor.id); }
+  return request(`/projects/${projectId}/timeline?${params}`, TimelineResponseSchema, { signal });
+}
+
+// Local installations open without credentials. An explicitly authenticated
+// server can still use a configured or browser-saved key.
+let localAccess = false;
+export function isLocalAccess(): boolean { return localAccess; }
 let API_KEY: string =
   import.meta.env.VITE_OPEN_BRAIN_API_KEY ??
   (typeof localStorage !== 'undefined' ? localStorage.getItem(TOKEN_STORAGE_KEY) ?? '' : '') ??
   '';
 
-// Drop the cached Bearer key and end the session. In prod this kicks
-// the user through Easy Auth's /.auth/logout endpoint, which clears the
-// Entra cookie and redirects back to the SPA root (where bootAuth will
-// re-trigger the AAD login). In dev there's no cookie session — we just
-// reload so any in-memory state resets.
 export function logout(): void {
   localStorage.removeItem(TOKEN_STORAGE_KEY);
   window.location.reload();
 }
 
 export async function bootAuth(): Promise<void> {
-  if (!API_KEY) throw new Error('LOCAL_LOGIN_REQUIRED');
-  const response = await fetch('/api/v1/projects', { headers: { Authorization: `Bearer ${API_KEY}` } });
+  let response = await fetch(`${apiBase()}/projects`);
+  if (response.ok) {
+    localAccess = true;
+    API_KEY = '';
+    localStorage.removeItem(TOKEN_STORAGE_KEY);
+    return;
+  }
+  if (response.status === 401 && API_KEY) {
+    response = await fetch(`${apiBase()}/projects`, { headers: { Authorization: `Bearer ${API_KEY}` } });
+  }
   if (response.status === 401) {
     localStorage.removeItem(TOKEN_STORAGE_KEY);
     API_KEY = '';
-    throw new Error('LOCAL_LOGIN_REQUIRED');
+    throw new Error('AUTH_REQUIRED');
   }
   if (!response.ok) throw new Error(`Connection failed: HTTP ${response.status}`);
 }
@@ -136,11 +133,11 @@ async function request<T>(
   init: RequestInit = {},
 ): Promise<T> {
   const headers = new Headers(init.headers);
-  headers.set('Authorization', `Bearer ${API_KEY}`);
+  if (API_KEY) headers.set('Authorization', `Bearer ${API_KEY}`);
   if (init.body && !headers.has('Content-Type') && typeof init.body === 'string') {
     headers.set('Content-Type', 'application/json');
   }
-  const res = await fetch(`${BASE}${path}`, { ...init, headers, credentials: 'include' });
+  const res = await fetch(`${apiBase()}${path}`, { ...init, headers, credentials: 'include' });
   const text = await res.text();
   const json: unknown = text ? JSON.parse(text) : null;
   if (!res.ok) {
@@ -154,7 +151,14 @@ async function request<T>(
   if (!parsed.success) {
     throw new ApiError(res.status, `Response failed validation: ${parsed.error.message}`, json);
   }
-  return parsed.data;
+  return mapResourceUrls(parsed.data);
+}
+
+// Local file links need the same authenticated service proxy as API requests.
+function mapResourceUrls<T>(value: T): T {
+  if (Array.isArray(value)) return value.map(mapResourceUrls) as T;
+  if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, ['blob_url', 'download_url'].includes(key) && typeof item === 'string' ? resourceUrl(item) : mapResourceUrls(item)])) as T;
+  return value;
 }
 
 // For mutations whose response shape we don't need to validate against —
@@ -162,11 +166,11 @@ async function request<T>(
 // across endpoints. The frontend only cares whether the call succeeded.
 async function fetchOk(path: string, init: RequestInit = {}): Promise<void> {
   const headers = new Headers(init.headers);
-  headers.set('Authorization', `Bearer ${API_KEY}`);
+  if (API_KEY) headers.set('Authorization', `Bearer ${API_KEY}`);
   if (init.body && !headers.has('Content-Type') && typeof init.body === 'string') {
     headers.set('Content-Type', 'application/json');
   }
-  const res = await fetch(`${BASE}${path}`, { ...init, headers, credentials: 'include' });
+  const res = await fetch(`${apiBase()}${path}`, { ...init, headers, credentials: 'include' });
   if (!res.ok) {
     const text = await res.text();
     let msg = `HTTP ${res.status}`;
@@ -384,19 +388,21 @@ export async function reprocessContent(id: string): Promise<void> {
 // async pending.
 export async function uploadFile(opts: {
   file: File;
+  sessionId?: string;
   projectIds?: string[];
   tags?: string[];
   title?: string;
 }): Promise<ContentCreateResponse> {
   const fd = new FormData();
   fd.set('type', 'document');
+  if(opts.sessionId) fd.set('session_id',opts.sessionId);
   fd.set('file', opts.file);
   if (opts.title) fd.set('title', opts.title);
   if (opts.projectIds && opts.projectIds.length > 0) fd.set('project_ids', opts.projectIds.join(','));
   if (opts.tags && opts.tags.length > 0) fd.set('tags', opts.tags.join(','));
   const headers = new Headers();
-  headers.set('Authorization', `Bearer ${API_KEY}`);
-  const res = await fetch(`${BASE}/content`, { method: 'POST', body: fd, headers, credentials: 'include' });
+  if (API_KEY) headers.set('Authorization', `Bearer ${API_KEY}`);
+  const res = await fetch(`${apiBase()}/content`, { method: 'POST', body: fd, headers, credentials: 'include' });
   const text = await res.text();
   const json: unknown = text ? JSON.parse(text) : null;
   if (!res.ok) {
@@ -414,6 +420,7 @@ export async function uploadFile(opts: {
 
 export async function saveFromUrl(opts: {
   url: string;
+  sessionId?: string;
   projectIds?: string[];
   tags?: string[];
   title?: string;
@@ -421,6 +428,7 @@ export async function saveFromUrl(opts: {
   const body = JSON.stringify({
     url: opts.url,
     project_ids: opts.projectIds,
+    session_id: opts.sessionId,
     tags: opts.tags,
     title: opts.title,
   });
@@ -470,10 +478,33 @@ export async function listActivity(query: ActivityListQuery = {}): Promise<Activ
 
 export async function liteRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
-  headers.set('Authorization', `Bearer ${API_KEY}`);
+  if (API_KEY) headers.set('Authorization', `Bearer ${API_KEY}`);
   if (init.body) headers.set('Content-Type', 'application/json');
-  const response = await fetch(`${BASE}${path}`, { ...init, headers });
+  const response = await fetch(`${apiBase()}${path}`, { ...init, headers });
   const json = await response.json();
   if (!response.ok) throw new Error(json.error ?? `HTTP ${response.status}`);
   return json as T;
+}
+
+
+export async function listSessions(projectId?: string | null): Promise<Session[]> {
+  const query=projectId===undefined?'':`?project_id=${projectId??'null'}`;
+  return (await request(`/sessions${query}`,z.object({sessions:z.array(SessionSchema)}))).sessions;
+}
+export async function getSession(id: string): Promise<Session> {
+  return (await request(`/sessions/${id}`,z.object({session:SessionSchema}))).session;
+}
+export async function createSession(input: z.infer<typeof SessionCreateSchema>): Promise<Session> {
+  return (await request('/sessions',z.object({session:SessionSchema}),{method:'POST',body:JSON.stringify(SessionCreateSchema.parse(input))})).session;
+}
+export async function updateSession(id:string,input:z.infer<typeof SessionUpdateSchema>):Promise<Session> {
+  return (await request(`/sessions/${id}`,z.object({session:SessionSchema}),{method:'PUT',body:JSON.stringify(SessionUpdateSchema.parse(input))})).session;
+}
+export async function deleteSession(id:string):Promise<{ok:boolean;pending_files:number}> {
+  return request(`/sessions/${id}`,z.object({ok:z.boolean(),pending_files:z.number()}),{method:'DELETE'});
+}
+export function listSessionTimeline(sessionId:string,search:string,cursor:TimelineCursor|null,signal?:AbortSignal,tags:string[]=[],tagMatch:TimelineTagMatch='all'):Promise<TimelineResponse> {
+  const params=new URLSearchParams({search,tag_match:tagMatch});tags.forEach(tag=>params.append('tag',tag));
+  if(cursor){params.set('before_at',cursor.at);params.set('before_id',cursor.id);}
+  return request(`/sessions/${sessionId}/timeline?${params}`,TimelineResponseSchema,{signal});
 }

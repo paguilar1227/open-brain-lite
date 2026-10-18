@@ -7,6 +7,7 @@ import {
 } from '@azure/storage-blob';
 
 export interface BlobStorage {
+  delete?(blobUrlOrName: string): Promise<void>;
   upload(blobName: string, data: Buffer, contentType: string): Promise<string>;
   exists(blobName: string): Promise<boolean>;
   getUrl(blobName: string): string;
@@ -106,6 +107,7 @@ export function createBlobStorage(connectionString: string, containerName: strin
   };
 
   return {
+    async delete(value) { await containerClient.getBlockBlobClient(resolveBlobName(value, 'delete')).deleteIfExists(); },
     async upload(blobName, data, contentType) {
       const blockBlobClient = containerClient.getBlockBlobClient(blobName);
       await blockBlobClient.upload(data, data.length, {

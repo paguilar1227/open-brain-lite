@@ -21,11 +21,13 @@ import {
 import { toUiProject } from '../lib/view';
 import { cls, fmtRel } from '../lib/util';
 import type { ActionDispatch } from '../types';
+import { SessionsPage } from './SessionsPage';
 import { MemoryTab } from './project/MemoryTab';
 import { ChatTab } from './project/ChatTab';
 import { DocumentsTab } from './project/DocumentsTab';
 import { NotesTab } from './project/NotesTab';
 import { TodosTab } from './project/TodosTab';
+import { TimelineTab } from './project/TimelineTab';
 import { SearchInput, type MentionTarget, type ProjectSuggestion, type TagSuggestion } from '../components/SearchInput';
 
 interface Props {
@@ -34,7 +36,7 @@ interface Props {
   onRoute: (r: import('../types').Route) => void;
 }
 
-type TabId = 'memory' | 'chat' | 'documents' | 'notes' | 'todos';
+type TabId = 'sessions' | 'memory' | 'chat' | 'timeline' | 'documents' | 'notes' | 'todos';
 
 export function ProjectPage({ projectId, onAction, onRoute }: Props) {
   const [tab, setTab] = useState<TabId>('chat');
@@ -151,8 +153,10 @@ export function ProjectPage({ projectId, onAction, onRoute }: Props) {
   }
 
   const tabs = [
+    { id: 'sessions', label: 'Sessions' },
     { id: 'memory', label: 'Memory' },
     { id: 'chat', label: 'Chat', icon: <Icons.Chat />, count: 0 },
+    { id: 'timeline', label: 'Timeline', icon: <Icons.Activity /> },
     { id: 'documents', label: 'Documents', icon: <Icons.Doc />, count: project.counts.docs },
     { id: 'notes', label: 'Notes', icon: <Icons.Note />, count: project.counts.notes },
     { id: 'todos', label: 'Todos', icon: <Icons.Check />, count: project.counts.todos },
@@ -260,8 +264,10 @@ export function ProjectPage({ projectId, onAction, onRoute }: Props) {
           <PanelErrorFallback error={error} reset={reset} title="This tab ran into a problem" />
         )}
       >
+        {tab === 'sessions' && <SessionsPage projectId={projectId} onRoute={onRoute} />}
         {tab === 'memory' && <MemoryTab projectId={projectId} />}
         {tab === 'chat' && <ChatTab project={project} />}
+        {tab === 'timeline' && <TimelineTab projectId={projectId} />}
         {tab === 'documents' && <DocumentsTab project={project} onAction={onAction} />}
         {tab === 'notes' && <NotesTab project={project} onAction={onAction} />}
         {tab === 'todos' && <TodosTab project={project} onAction={onAction} />}

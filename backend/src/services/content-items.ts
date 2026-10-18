@@ -46,6 +46,7 @@ export interface CreateContentInput {
     mimeType: string;
     filename: string;
   };
+  sessionId?: string | null;
   projectIds?: string[];
   tags?: string[];
   folder?: string | null;      // optional — folder path the note is filed under
@@ -136,7 +137,7 @@ async function createContentItemImpl(
     console.log(`[content] File hash: ${fileHash}`);
 
     if (!input.skipDedup) {
-      const existing = await findByFileHash(deps.db, fileHash);
+      const existing = await findByFileHash(deps.db, fileHash, input.sessionId);
       if (existing) {
         console.log(`[content] Duplicate file detected, returning existing: ${existing.id}`);
         return {
@@ -196,6 +197,7 @@ async function createContentItemImpl(
     mimeType: input.file?.mimeType ?? null,
     fileHash,
     projectIds: input.projectIds ?? [],
+    sessionId: input.sessionId,
     tags: input.tags ?? [],
     folder: input.folder ?? null,
     embedding: null,
@@ -674,6 +676,7 @@ async function rerunIngestTail(
     title: userTitle,
     file,
     projectIds: row.project_ids,
+    sessionId: row.session_id,
     tags: row.tags,
     folder: row.folder,
     sourceUrl: row.source_url ?? undefined,
@@ -712,6 +715,7 @@ export async function updateContentItem(
   id: string,
   patch: {
     title?: string;
+    sessionId?: string | null;
     projectIds?: string[];
     tags?: string[];
     folder?: string | null;
@@ -720,6 +724,7 @@ export async function updateContentItem(
   return dbUpdate(deps.db, id, {
     title: patch.title,
     projectIds: patch.projectIds,
+    sessionId: patch.sessionId,
     tags: patch.tags,
     folder: patch.folder,
   });
@@ -988,6 +993,7 @@ export async function replaceContent(
     content: input.content,
     title: input.title ?? oldRow.title,
     projectIds: oldRow.project_ids,
+    sessionId: oldRow.session_id,
     tags: oldRow.tags,
     folder: oldRow.folder,
     skipDedup: true,

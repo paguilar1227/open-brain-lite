@@ -4,6 +4,7 @@ import { createRequire } from 'node:module';
 import { mkdir, readFile, writeFile, rename } from 'node:fs/promises';
 import type { Config } from '../config.js';
 import { providerEnvironment } from './environment.js';
+import { trySelectCopilotDefault } from './subscription.js';
 type Provider = 'copilot' | 'chatgpt';
 const require = createRequire(import.meta.url);
 type LoginState = { status: 'running' | 'succeeded' | 'failed'; url?: string; code?: string; message?: string; child?: ChildProcess };
@@ -52,7 +53,18 @@ export class ProviderLogin {
     child.stdout?.on('data', collect);
     child.stderr?.on('data', collect);
     child.on('error', () => { state.status = 'failed'; state.message = 'Sign-in could not start. Check the container logs and CLI installation.'; });
-    child.on('exit', code => { state.status = code === 0 ? 'succeeded' : 'failed'; state.message = code === 0 ? 'Signed in. Select this provider and save.' : 'Sign-in did not finish. Try again or check device-login access for your account.'; state.child = undefined; });
+    child.on('exit', code => {
+      state.child = undefined;
+      state.status = code === 0 ? 'succeeded' : 'failed';
+      state.message = code === 0 ? 'Signed in. Select this provider and save.' : 'Sign-in did not finish. Try again or check device-login access for your account.';
+      if (code === 0 && provider === 'copilot' && this.config.autoSelectCopilot) {
+        state.status = 'running';
+        state.message = 'Signed in. Checking available models…';
+        void trySelectCopilotDefault(this.config).then(selected => {
+          state.message = selected ? 'Signed in. Copilot with Claude Sonnet 5.5 is now selected.' : 'Signed in. Select an available provider and save.';
+        }).finally(() => { state.status = 'succeeded'; });
+      }
+    });
     return this.status(provider);
   }
 }

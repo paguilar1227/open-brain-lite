@@ -151,6 +151,8 @@ export type Route =
   // URL writes ?q= / ?scope= so bookmarks / back-forward replay
   // naturally). Both default to undefined = no search-mode seed.
   | { route: 'home'; q?: string; scope?: 'personal' | 'all' | string }
+  | { route: 'sessions' }
+  | { route: 'session'; session: string }
   | { route: 'projects'; action?: 'new' }
   | { route: 'project'; project: string }
   | { route: 'tags'; name?: string }
@@ -161,19 +163,19 @@ export type Route =
   // Notes; sections are stored per todo (todo.section) and scoped naturally.
   | { route: 'todos'; scope?: 'personal' | 'all' | string }
   | { route: 'activity' }
+  | { route: 'settings' }
   | { route: 'trash' };
 
 export type RouteName = Route['route'];
 
 export type ModalKind =
-  | { kind: 'upload'; payload: Project | null }
-  | { kind: 'note-edit'; payload: Note | null; projectId?: string; folder?: string | null }
+  | { kind: 'upload'; payload: Project | null; sessionId?: string }
+  | { kind: 'note-edit'; payload: Note | null; projectId?: string; sessionId?: string; folder?: string | null }
   | { kind: 'doc-read'; payload: DocumentItem }
   | { kind: 'todo-detail'; payload: Todo }
   | { kind: 'bulk-confirm'; payload: { kind: string; count: number } }
   | { kind: 'confirm-rename'; payload: TagRow }
   | { kind: 'new-project' }
-  | { kind: 'settings' }
   // `search` is no longer a modal — it's a route. Callers should
   // navigate via onRoute({ route: 'home', q, scope }). Kept commented
   // for grep-discoverability if you're looking for "where did the

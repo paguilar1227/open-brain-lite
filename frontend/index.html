@@ -1,11 +1,12 @@
 <!doctype html>
-<html lang="en" data-theme="dark">
+<html lang="en" data-theme="light">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <link rel="manifest" href="/manifest.webmanifest" />
-    <meta name="theme-color" content="#548d78" />
+    <meta name="theme-color" content="#ffffff" />
     <title>Open Brain Lite</title>
+    <script>try { document.documentElement.dataset.theme = localStorage.getItem('ob.theme') === 'dark' ? 'dark' : 'light'; } catch { /* Use the light default if storage is unavailable. */ }</script>
   </head>
   <body>
     <div class="backdrop"><span class="blob b3"></span><span class="blob b4"></span></div>

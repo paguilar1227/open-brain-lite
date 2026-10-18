@@ -10,11 +10,7 @@ import './styles.css';
 import './theme.css';
 import { startNotifications } from './lib/notifications';
 
-// bootAuth resolves the Bearer key in production by exchanging the Easy Auth
-// session cookie via /api/auth/token. In local dev (VITE_OPEN_BRAIN_API_KEY
-// set) it's a no-op. If the user's session has expired bootAuth performs a
-// hard navigation to the AAD login URL and never resolves — that's why we
-// don't render anything inside the catch.
+// Open the local workspace directly; authenticated servers retain their login.
 bootAuth()
   .then(() => {
     startNotifications();
@@ -36,13 +32,11 @@ bootAuth()
       <main className="login-card">
         <h1>Open Brain Lite</h1>
         <p>Your projects. Your memory. On your machine.</p>
-        <form onSubmit={(event) => { event.preventDefault(); const data = new FormData(event.currentTarget); signIn(String(data.get('key') ?? '')); }}>
-          <label htmlFor="key">Installation API key</label>
+        {err?.message === 'AUTH_REQUIRED' ? <form onSubmit={(event) => { event.preventDefault(); const data = new FormData(event.currentTarget); signIn(String(data.get('key') ?? '')); }}>
+          <label htmlFor="key">Workspace API key</label>
           <input id="key" name="key" type="password" required autoComplete="current-password" />
           <button className="btn btn-primary" type="submit">Open my brain</button>
-        </form>
-        <p className="page-subtle">Find the key in the .env file created by the setup command.</p>
-        {err?.message !== 'LOCAL_LOGIN_REQUIRED' && <p role="alert">{String(err?.message ?? err)}</p>}
+        </form> : <><p role="alert">{String(err?.message ?? err)}</p><button className="btn" onClick={() => window.location.reload()}>Retry connection</button></>}
       </main>,
     );
   });

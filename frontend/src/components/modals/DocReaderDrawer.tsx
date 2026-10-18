@@ -1,3 +1,4 @@
+import { onHostEvent } from '../../lib/host';
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Icons } from '../Icons';
@@ -51,8 +52,8 @@ function DocPreview({
       e.stopImmediatePropagation();
       setImageOpen(false);
     };
-    document.addEventListener('keydown', onKey, true);
-    return () => document.removeEventListener('keydown', onKey, true);
+    const stopKey = onHostEvent('keydown', onKey, true);
+    return () => stopKey();
   }, [imageOpen]);
 
   if (mode === 'text' || !previewUrl) return null;
@@ -225,8 +226,8 @@ export function DocReaderBody({
       e.stopImmediatePropagation();
       setPdfOpen(false);
     };
-    document.addEventListener('keydown', onKey, true);
-    return () => document.removeEventListener('keydown', onKey, true);
+    const stopKey = onHostEvent('keydown', onKey, true);
+    return () => stopKey();
   }, [pdfOpen]);
 
   return (

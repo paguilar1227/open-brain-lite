@@ -13,8 +13,7 @@ const phase = process.argv[2];
 assert(['write', 'read'].includes(phase), 'Usage: node scripts/verify-docker.mjs write|read [receipt-path]');
 const receiptPath = process.argv[3] || 'scratch/docker-acceptance-receipt.json';
 const base = process.env.OPEN_BRAIN_BASE_URL || `http://127.0.0.1:${process.env.PORT || 3210}`;
-assert(process.env.OPEN_BRAIN_API_KEY, 'Run scripts/setup.sh first');
-const headers = { Authorization: `Bearer ${process.env.OPEN_BRAIN_API_KEY}` };
+const headers = {}; // Local REST and MCP access require no installation key.
 const receipt = phase === 'read' ? JSON.parse(await readFile(receiptPath, 'utf8')) : { checks: [], files: [] };
 
 async function checkpoint(check) {

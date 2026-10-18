@@ -54,8 +54,8 @@ export function setup() {
     });
     await page.goto('/');
     await page.locator('.app, .login-card').first().waitFor({ state: 'visible' });
-    if (await page.getByLabel('Installation API key').isVisible()) {
-      await page.getByLabel('Installation API key').fill(installationKey());
+    if (await page.getByLabel('Workspace API key').isVisible()) {
+      await page.getByLabel('Workspace API key').fill(installationKey());
       await page.getByRole('button', { name: 'Open my brain' }).click();
     }
     await waitForAppReady(page);

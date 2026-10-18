@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile, stat, rename } from 'node:fs/promises';
+import { mkdir, readFile, writeFile, stat, rename, rm } from 'node:fs/promises';
 import { resolve, sep } from 'node:path';
 import { createHmac, timingSafeEqual, randomUUID } from 'node:crypto';
 import type { BlobStorage } from './blob.js';
@@ -30,6 +30,7 @@ export class LocalFileStorage implements BlobStorage {
     await writeFile(`${file.path}.json`, JSON.stringify({ contentType }), { mode: 0o600 });
     return this.getUrl(name);
   }
+  async delete(value: string) { const file=this.name(value); await rm(file.path,{force:true}); await rm(`${file.path}.json`,{force:true}); }
   async exists(name: string) { try { return (await stat(this.name(name).path)).isFile(); } catch (err: any) { if (err.code === 'ENOENT') return false; throw err; } }
   getUrl(name: string) { return `/api/files/${encodeURIComponent(this.name(name).name)}`; }
   async download(value: string) { return readFile(this.name(value).path); }

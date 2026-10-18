@@ -113,6 +113,7 @@ export const TitleSourceSchema = z.enum(['user', 'ai_generated', 'filename']);
 export type TitleSource = z.infer<typeof TitleSourceSchema>;
 
 export const ContentItemSchema = z.object({
+  session_id: UuidSchema.nullable().optional(),
   id: UuidSchema,
   type: ContentTypeSchema,
   title: z.string(),
@@ -162,6 +163,7 @@ export type ContentGetResponse = z.infer<typeof ContentGetResponseSchema>;
 // JSON body for note creation. Document uploads use multipart and aren't
 // covered here — they need a separate non-JSON path.
 export const NoteCreateRequestSchema = z.object({
+  session_id: UuidSchema.nullable().optional(),
   type: z.literal('note'),
   title: z.string().min(1),
   content: z.string().min(1),
@@ -174,6 +176,7 @@ export const NoteCreateRequestSchema = z.object({
 export type NoteCreateRequest = z.infer<typeof NoteCreateRequestSchema>;
 
 export const ContentUpdateRequestSchema = z.object({
+  session_id: UuidSchema.nullable().optional(),
   title: z.string().min(1).optional(),
   content: z.string().optional(),
   project_ids: z.array(UuidSchema).optional(),
@@ -190,6 +193,7 @@ export type ContentUpdateRequest = z.infer<typeof ContentUpdateRequestSchema>;
 // raw strings here and let the handler do the multi-valued parsing so this
 // schema doubles as accurate OpenAPI documentation.
 export const ContentListQuerySchema = z.object({
+  session_id: UuidSchema.optional(),
   type: ContentTypeSchema.optional(),
   // Either a UUID (rows whose project_ids array contains this UUID) or the
   // literal string 'null' (rows with no project membership at all). Mirrors
@@ -223,6 +227,7 @@ export type ContentStatusResponse = z.infer<typeof ContentStatusResponseSchema>;
 // pre-OpenAPIHono shape; project_ids accept any string for the same reason
 // content/POST does (handler / service layer enforces UUID semantics).
 export const UrlIngestRequestSchema = z.object({
+  session_id: UuidSchema.nullable().optional(),
   url: z.string({ required_error: 'url is required' }).min(1, 'url is required'),
   project_ids: z.array(z.string()).default([]),
   tags: z.array(z.string()).default([]),
@@ -238,6 +243,7 @@ export type UrlIngestRequest = z.infer<typeof UrlIngestRequestSchema>;
 // embeds a slimmer todo (omits pinned_at) while listTodos returns the full
 // row. similarity is added when a todo appears as a search result.
 export const TodoSchema = z.object({
+  session_id: UuidSchema.nullable().optional(),
   id: UuidSchema,
   content: z.string(),
   project_id: UuidSchema.nullable(),
@@ -269,6 +275,7 @@ export const TodoGetResponseSchema = z.object({
 export type TodoGetResponse = z.infer<typeof TodoGetResponseSchema>;
 
 export const TodoCreateRequestSchema = z.object({
+  session_id: UuidSchema.nullable().optional(),
   content: z.string().min(1),
   project_id: UuidSchema.nullable().optional(),
   parent_id: UuidSchema.nullable().optional(),
@@ -280,6 +287,7 @@ export const TodoCreateRequestSchema = z.object({
 export type TodoCreateRequest = z.infer<typeof TodoCreateRequestSchema>;
 
 export const TodoUpdateRequestSchema = z.object({
+  session_id: UuidSchema.nullable().optional(),
   content: z.string().min(1).optional(),
   project_id: UuidSchema.nullable().optional(),
   parent_id: UuidSchema.nullable().optional(),
@@ -295,6 +303,7 @@ export type TodoUpdateRequest = z.infer<typeof TodoUpdateRequestSchema>;
 // the same. `tags`, `pinned`, `due_before`, `due_after`, `limit` are
 // validated by the handler so the schema reflects the wire surface.
 export const TodoListQuerySchema = z.object({
+  session_id: UuidSchema.optional(),
   project_id: z.string().optional(),
   parent_id: z.string().optional(),
   status: TodoStatusSchema.optional(),
@@ -402,6 +411,7 @@ export const SearchHitSchema = z.discriminatedUnion('type', [ChunkHitSchema, Tod
 export type SearchHit = z.infer<typeof SearchHitSchema>;
 
 export const SearchRequestSchema = z.object({
+  session_id: UuidSchema.optional(),
   // Empty string is allowed: callers may send predicate-only requests
   // (e.g. just tag/project filters with no free text), in which case the
   // backend takes the filter-only listing path and skips embedding +
@@ -450,6 +460,7 @@ export const RagCitationSchema = z.object({
 export type RagCitation = z.infer<typeof RagCitationSchema>;
 
 export const RagRequestSchema = z.object({
+  session_id: UuidSchema.optional(),
   question: z.string().min(1),
   project_id: UuidSchema.optional(),
   depth: z.enum(['auto', 'fast', 'thorough']).optional(),
@@ -473,6 +484,7 @@ export const RagResponseSchema = z.object({
 export type RagResponse = z.infer<typeof RagResponseSchema>;
 
 export const FindMentionsRequestSchema = z.object({
+  session_id: UuidSchema.optional(),
   entity: z.string().min(1),
   type: z.enum(['person', 'org', 'concept', 'tool', 'paper']).optional(),
   project_id: UuidSchema.optional(),
@@ -562,6 +574,42 @@ export const ActivityListQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(500).optional(),
 });
 export type ActivityListQuery = z.infer<typeof ActivityListQuerySchema>;
+
+export const TimelineCursorSchema = z.object({ at: z.string().datetime({ offset: true }), id: z.string().regex(/^\d+$/) });
+export const TimelineEventSchema = z.object({
+  id: z.string(),
+  session_id: UuidSchema.nullable().optional(),
+  session_name: z.string().nullable().optional(),
+  project_id: UuidSchema.nullable(),
+  entity_id: UuidSchema,
+  entity_type: ActivityEntityTypeSchema,
+  action: z.enum(['uploaded', 'created', 'edited', 'archived', 'restored', 'deleted']),
+  title: z.string(),
+  changed_fields: z.array(z.string()),
+  tags: z.array(z.string()),
+  occurred_at: z.string().datetime({ offset: true }),
+  reconstructed: z.boolean(),
+});
+export type TimelineEvent = z.infer<typeof TimelineEventSchema>;
+export type TimelineCursor = z.infer<typeof TimelineCursorSchema>;
+export const TimelineResponseSchema = z.object({
+  events: z.array(TimelineEventSchema),
+  total: z.number().int().nonnegative(),
+  next_cursor: TimelineCursorSchema.nullable(),
+  available_tags: z.array(z.string()),
+});
+export type TimelineResponse = z.infer<typeof TimelineResponseSchema>;
+export const TimelineQuerySchema = z.object({
+  search: z.string().optional(),
+  tags: z.array(z.string()).optional(),
+  tag_match: z.enum(['all', 'any']).optional().describe('Combine selected tags with all (AND, default) or any (OR). No selected tags shows all events.'),
+  before_at: z.string().datetime({ offset: true }).optional(),
+  before_id: z.string().regex(/^\d+$/).optional(),
+  // Match the existing activity API's page size and per-request ceiling.
+  limit: z.coerce.number().int().min(1).max(500).default(100),
+}).refine(q => Boolean(q.before_at) === Boolean(q.before_id), 'Both cursor fields are required');
+export type TimelineQuery = z.infer<typeof TimelineQuerySchema>;
+export type TimelineTagMatch = NonNullable<TimelineQuery['tag_match']>;
 
 // ---------------------------------------------------------------------------
 // Stats — note the nested shape that the existing /api/v1/stats handler
@@ -761,6 +809,7 @@ export type TodoCommentResponse = z.infer<typeof TodoCommentResponseSchema>;
 // short ids; surfacing schema rejection here before the handler runs would
 // regress existing tests + clients.
 export const ContentCreateRequestSchema = z.object({
+  session_id: UuidSchema.nullable().optional(),
   type: ContentTypeSchema,
   content: z.string().optional(),
   title: z.string().optional(),
@@ -916,3 +965,21 @@ export const ContentReplaceAckSchema = z.object({
   status: ProcessingStatusSchema,
 });
 export type ContentReplaceAck = z.infer<typeof ContentReplaceAckSchema>;
+
+
+// A session owns its content and optionally belongs to one project.
+export const SessionSchema = z.object({
+  id: UuidSchema, project_id: UuidSchema.nullable(), session_key: z.string(), name: z.string(),
+  summary: z.string(), decisions: z.array(z.string()), next_steps: z.array(z.string()),
+  note_id: UuidSchema.nullable(), created_at: z.string(), updated_at: z.string(),
+  counts: z.object({ documents: z.number(), notes: z.number(), todos: z.number() }).optional(),
+});
+export type Session = z.infer<typeof SessionSchema>;
+export const SessionCreateSchema = z.object({
+  name: z.string().trim().min(1), project_id: UuidSchema.nullable().optional(),
+  session_key: z.string().min(1).optional(),
+});
+export const SessionUpdateSchema = z.object({
+  name: z.string().trim().min(1).optional(), project_id: UuidSchema.nullable().optional(),
+  summary: z.string().optional(), decisions: z.array(z.string()).optional(), next_steps: z.array(z.string()).optional(),
+});

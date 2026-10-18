@@ -1,3 +1,4 @@
+import { onHostEvent } from '../lib/host';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { cls } from '../lib/util';
@@ -342,7 +343,7 @@ function TagPickerPopover({ options, selected, onToggle, onClose }: PopoverProps
   // Outside-click + Escape. Pattern mirrors DateTimePicker.
   useEffect(() => {
     const onDown = (e: MouseEvent) => {
-      if (popRef.current?.contains(e.target as Node)) return;
+      if (e.composedPath().includes(popRef.current!)) return;
       onClose();
     };
     const onKey = (e: globalThis.KeyboardEvent) => {
@@ -351,11 +352,11 @@ function TagPickerPopover({ options, selected, onToggle, onClose }: PopoverProps
         onClose();
       }
     };
-    document.addEventListener('mousedown', onDown);
-    document.addEventListener('keydown', onKey);
+    const stopDown = onHostEvent('mousedown', onDown);
+    const stopKey = onHostEvent('keydown', onKey);
     return () => {
-      document.removeEventListener('mousedown', onDown);
-      document.removeEventListener('keydown', onKey);
+      stopDown();
+      stopKey();
     };
   }, [onClose]);
 

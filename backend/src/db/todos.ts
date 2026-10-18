@@ -3,6 +3,7 @@ import type { DbClient } from './client.js';
 export interface TodoInsert {
   content: string;
   projectId: string | null;
+  sessionId?: string | null;
   section: string | null;
   parentId: string | null;
   priority: 'P1' | 'P2' | 'P3' | null;
@@ -15,6 +16,7 @@ export interface TodoRow {
   id: string;
   content: string;
   project_id: string | null;
+  session_id?: string | null;
   section: string | null;
   parent_id: string | null;
   status: 'not_started' | 'in_progress' | 'paused' | 'done';
@@ -32,6 +34,7 @@ export interface TodoRow {
 }
 
 export interface ListTodosFilters {
+  session_id?: string;
   project_id?: string | null;       // null explicitly = personal (Inbox); undefined = no filter
   status?: string;
   priority?: string;
@@ -52,13 +55,13 @@ export interface ListTodosFilters {
 
 export async function insertTodo(db: DbClient, todo: TodoInsert): Promise<TodoRow> {
   const result = await db.query(
-    `INSERT INTO todos (content, project_id, section, parent_id, priority, due_date, tags, embedding)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    `INSERT INTO todos (content, project_id, section, parent_id, priority, due_date, tags, embedding, session_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
      RETURNING *`,
     [
       todo.content, todo.projectId, todo.section, todo.parentId,
       todo.priority, todo.dueDate, todo.tags,
-      todo.embedding ? JSON.stringify(todo.embedding) : null,
+      todo.embedding ? JSON.stringify(todo.embedding) : null, todo.sessionId ?? null,
     ],
   );
   return result.rows[0];
@@ -74,6 +77,7 @@ export async function listTodos(
 
   if (!filters.include_archived) conditions.push('archived = false');
 
+  if (filters.session_id) { conditions.push(`session_id = $${i++}`); params.push(filters.session_id); }
   if (filters.project_id === null) {
     conditions.push('project_id IS NULL');
   } else if (filters.project_id !== undefined) {
@@ -164,6 +168,7 @@ export async function updateTodo(
   let i = 1;
 
   if (patch.content !== undefined) { sets.push(`content = $${i++}`); params.push(patch.content); }
+  if (patch.sessionId !== undefined) { sets.push(`session_id = $${i++}`); params.push(patch.sessionId); }
   if (patch.projectId !== undefined) { sets.push(`project_id = $${i++}`); params.push(patch.projectId); }
   if (patch.section !== undefined) { sets.push(`section = $${i++}`); params.push(patch.section); }
   if (patch.parentId !== undefined) { sets.push(`parent_id = $${i++}`); params.push(patch.parentId); }
@@ -454,6 +459,7 @@ export async function findTodosByLexical(
   query: string,
   limit: number = 10,
   opts: {
+    sessionId?: string;
     projectId?: string | null;
     tags?: string[];
     /** Combine multiple tags: 'all' = AND (@>, default), 'any' = OR (&&). */
@@ -472,7 +478,7 @@ export async function findTodosByLexical(
   // Noise floor: 1-char queries with no caller-asserted signal would match
   // ~everything via ILIKE %a%. Short-circuit. Filter-only mode (empty query
   // + tags) is fine.
-  const hasOwnFilter = !!opts.tags?.length || !!opts.excludedTags?.length || opts.projectId !== undefined;
+  const hasOwnFilter = !!opts.tags?.length || !!opts.excludedTags?.length || opts.projectId !== undefined || opts.sessionId !== undefined;
   if (!hasText && !hasOwnFilter && !opts.allowEmptyQuery) return [];
   const escaped = hasText
     ? q.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_')
@@ -498,6 +504,7 @@ export async function findTodosByLexical(
     params.push(opts.excludedTags);
     conditions.push(`NOT (tags && $${params.length}::text[])`);
   }
+  if (opts.sessionId) { params.push(opts.sessionId); conditions.push(`session_id = $${params.length}`); }
   if (opts.projectId === null) conditions.push('project_id IS NULL');
   else if (opts.projectId !== undefined) {
     params.push(opts.projectId);
@@ -506,7 +513,7 @@ export async function findTodosByLexical(
   params.push(limit);
   const limitParam = params.length;
   const result = await db.query(
-    `SELECT id, content, project_id, section, parent_id, status, priority,
+    `SELECT id, content, project_id, session_id, section, parent_id, status, priority,
             due_date, tags, archived, created_at, updated_at,
             -- Synthetic similarity for downstream compat — see chunks.ts.
             -- Cast to ::float so the pg NUMERIC default (string in JS)
@@ -527,6 +534,7 @@ export async function findSimilarTodos(
   threshold: number,
   limit: number = 10,
   opts: {
+    sessionId?: string;
     projectId?: string | null;
     tags?: string[];
     /** Combine multiple tags: 'all' = AND (@>, default), 'any' = OR (&&). */
@@ -551,13 +559,14 @@ export async function findSimilarTodos(
     conditions.push(`NOT (tags && $${i++}::text[])`);
     params.push(opts.excludedTags);
   }
+  if (opts.sessionId) { conditions.push(`session_id = $${i++}`); params.push(opts.sessionId); }
   if (opts.projectId === null) conditions.push('project_id IS NULL');
   else if (opts.projectId !== undefined) {
     conditions.push(`project_id = $${i++}::uuid`);
     params.push(opts.projectId);
   }
   const result = await db.query(
-    `SELECT id, content, project_id, section, parent_id, status, priority,
+    `SELECT id, content, project_id, session_id, section, parent_id, status, priority,
             due_date, tags, archived, created_at, updated_at,
             1 - (embedding <=> $1::vector) AS similarity
      FROM todos

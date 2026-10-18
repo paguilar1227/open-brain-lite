@@ -164,7 +164,9 @@ describe('MCP endpoint via Hono app', () => {
     expect(res.status).toBe(200);
     const body = JSON.parse(await res.text());
     expect(body.result?.tools).toBeDefined();
-    expect(body.result.tools.length).toBe(25);
+    expect(body.result.tools.map((tool: { name: string }) => tool.name)).toEqual(expect.arrayContaining([
+      'create_session', 'delete_session', 'project_timeline', 'bulk_todos', 'update_settings',
+    ]));
   });
 
   it('rejects unauthenticated /mcp calls with 401 — no fresh server spun up', async () => {
@@ -208,7 +210,9 @@ describe('MCP endpoint via Hono app', () => {
     const res = await app.fetch(req);
     expect(res.status).toBe(200);
     const body = JSON.parse(await res.text());
-    expect(body.result?.tools?.length).toBe(25);
+    expect(body.result?.tools?.map((tool: { name: string }) => tool.name)).toEqual(expect.arrayContaining([
+      'create_session', 'delete_session', 'session_timeline', 'upload_file', 'get_settings',
+    ]));
   });
 });
 

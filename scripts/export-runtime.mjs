@@ -1,0 +1,10 @@
+import { existsSync, cpSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { resolve, join } from 'node:path';
+import { execFileSync } from 'node:child_process';
+const root = resolve(import.meta.dirname, '..');
+const destination = resolve(process.argv[2] ?? 'runtime-export');
+mkdirSync(destination, { recursive: true });
+const paths = ['package.json','package-lock.json','Dockerfile','Dockerfile.ollama','docker-compose.yml','backend/package.json','backend/tsconfig.json','backend/src','backend/python','shared','frontend/package.json','frontend/index.html','frontend/tsconfig.json','frontend/tsconfig.node.json','frontend/vite.config.ts','frontend/vite.embedded.config.ts','frontend/src','frontend/public','migrations','plugin','scripts/verify-models.mjs'];
+for (const path of paths) if (existsSync(join(root, path))) cpSync(join(root, path), join(destination, path), { recursive: true, filter: file => !file.split('/').some(segment => ['node_modules','.env','dist'].includes(segment)) });
+writeFileSync(join(destination, 'runtime.json'), JSON.stringify({ source: 'https://github.com/paguilar1227/open-brain-lite', revision: execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim(), version: JSON.parse(readFileSync(join(root,'package.json'),'utf8')).version }));
+console.log(destination);

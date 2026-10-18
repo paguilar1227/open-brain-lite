@@ -1,3 +1,4 @@
+import { onHostEvent } from '../lib/host';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Icons } from './Icons';
 
@@ -27,16 +28,16 @@ export function OverflowMenu({ title = 'More actions', triggerClassName = 'btn',
   useEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent) => {
-      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+      if (!e.composedPath().includes(ref.current!)) setOpen(false);
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setOpen(false);
     };
-    document.addEventListener('mousedown', onDown);
-    document.addEventListener('keydown', onKey);
+    const stopDown = onHostEvent('mousedown', onDown);
+    const stopKey = onHostEvent('keydown', onKey);
     return () => {
-      document.removeEventListener('mousedown', onDown);
-      document.removeEventListener('keydown', onKey);
+      stopDown();
+      stopKey();
     };
   }, [open]);
 

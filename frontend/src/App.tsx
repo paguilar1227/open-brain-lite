@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
+import { onHostEvent } from './lib/host';
+import { embeddedHost, navigation, onNavigation } from './lib/host';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { CommandPalette } from './components/CommandPalette';
 import { MobileTabbar } from './components/MobileTabbar';
 import { Sidebar } from './components/Sidebar';
@@ -19,7 +21,9 @@ import { ActivityPage } from './pages/ActivityPage';
 import { HomePage } from './pages/HomePage';
 import { ProjectPage } from './pages/ProjectPage';
 import { ProjectsPage } from './pages/ProjectsPage';
-import { SettingsModal } from './components/modals/SettingsModal';
+import { SessionsPage } from './pages/SessionsPage';
+import { SessionPage } from './pages/SessionPage';
+import { SettingsPage } from './pages/SettingsPage';
 import { TagsPage } from './pages/TagsPage';
 import { TagDetailPage } from './pages/TagDetailPage';
 import { NotesPage } from './pages/NotesPage';
@@ -30,9 +34,9 @@ import { ErrorBoundary, ViewErrorFallback, ModalErrorFallback } from './componen
 import type { ModalKind, Route, SidebarMode, Theme } from './types';
 
 function readInitialTheme(): Theme {
-  if (typeof window === 'undefined') return 'dark';
+  if (typeof window === 'undefined') return 'light';
   const v = localStorage.getItem('ob.theme');
-  return v === 'light' ? 'light' : 'dark';
+  return v === 'dark' ? 'dark' : 'light';
 }
 
 function readInitialSidebarMode(): SidebarMode {
@@ -41,22 +45,40 @@ function readInitialSidebarMode(): SidebarMode {
   return v === 'expanded' || v === 'hidden' ? v : 'collapsed';
 }
 
+function readRoute(): Route {
+  if (navigation.location.pathname === '/sessions') return {route:'sessions'};
+  const session=navigation.location.pathname.match(/^\/sessions\/([0-9a-f-]{36})$/i);
+  if(session) return {route:'session',session:session[1]};
+  if (navigation.location.pathname === '/settings') return { route: 'settings' };
+  return (navigation.history.state?.obRoute as Route | undefined) ?? { route: 'home' };
+}
+
 export default function App() {
   const [theme, setTheme] = useState<Theme>(readInitialTheme);
-  const [route, setRoute] = useState<Route>({ route: 'home' });
+  const [route, setRoute] = useState<Route>(readRoute);
   const [modal, setModal] = useState<ModalKind | null>(null);
   const [cmdkOpen, setCmdkOpen] = useState(false);
   const [sidebarMode, setSidebarMode] = useState<SidebarMode>(readInitialSidebarMode);
+  const mainScroll = useRef<HTMLDivElement>(null);
   const isMobile = useIsMobile();
 
   useEffect(() => {
-    document.documentElement.dataset.theme = theme;
+    (embeddedHost()?.element ?? document.documentElement).dataset.theme = theme;
+    if (!embeddedHost()) document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#151715' : '#ffffff');
     localStorage.setItem('ob.theme', theme);
   }, [theme]);
 
   useEffect(() => {
     localStorage.setItem('ob.sidebarMode', sidebarMode);
   }, [sidebarMode]);
+
+  useEffect(() => {
+    const onPopState = () => setRoute(readRoute());
+    return onNavigation(onPopState);
+  }, []);
+  useEffect(() => {
+    if (route.route === 'settings' && mainScroll.current) mainScroll.current.scrollTop = 0;
+  }, [route]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -73,8 +95,8 @@ export default function App() {
         setTheme(t => (t === 'dark' ? 'light' : 'dark'));
       }
     };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
+    const stopKey = onHostEvent('keydown', onKey);
+    return () => stopKey();
   }, []);
 
   const onAction = useCallback((m: ModalKind) => setModal(m), []);
@@ -88,17 +110,31 @@ export default function App() {
   const [homeNonce, setHomeNonce] = useState(0);
 
   const navigate = useCallback((r: Route) => {
+    if(r.route==='sessions'||r.route==='session'){
+      const path=r.route==='sessions'?'/sessions':`/sessions/${r.session}`;
+      navigation.history.replaceState({obRoute:route},'',navigation.location.href);
+      navigation.history.pushState({obRoute:r},'',path);
+    }else if(navigation.location.pathname.startsWith('/sessions')){
+      navigation.history.pushState({obRoute:r},'',r.route==='settings'?'/settings':'/');
+    }
+    if (r.route === 'settings' && navigation.location.pathname !== '/settings') {
+      setModal(null);
+      navigation.history.replaceState({ obRoute: route }, '', navigation.location.href);
+      navigation.history.pushState({ obRoute: r, settingsEntry: true }, '', '/settings');
+    } else if (r.route !== 'settings' && navigation.location.pathname === '/settings') {
+      navigation.history.pushState({ obRoute: r }, '', '/');
+    }
     if (r.route === 'home' && !r.q && !r.scope) {
       // "Fresh home" intent — wipe URL view-state (q, scope, tag, mode)
       // and force a HomePage remount so its internal state matches.
-      window.history.replaceState(null, '', '/');
+      navigation.history.replaceState(null, '', '/');
       setHomeNonce((n) => n + 1);
     }
     setRoute(r);
     if (r.route === 'projects' && r.action === 'new') {
       setModal({ kind: 'new-project' });
     }
-  }, []);
+  }, [route]);
 
   const { data: projects = [] } = useProjects();
   const project = route.route === 'project' ? projects.find((p) => p.id === route.project) ?? null : null;
@@ -110,6 +146,8 @@ export default function App() {
     switch (route.route) {
       case 'home':
         return [{ label: 'Home' }];
+      case 'sessions': return [{label:'Sessions'}];
+      case 'session': return [{label:'Sessions',onClick:()=>navigate({route:'sessions'})},{label:'Session workspace'}];
       case 'projects':
         return [{ label: 'Projects' }];
       case 'project':
@@ -127,6 +165,8 @@ export default function App() {
         return [{ label: 'Todos' }];
       case 'trash':
         return [{ label: 'Archived' }];
+      case 'settings':
+        return [{ label: 'Settings' }];
       default:
         return [{ label: '—' }];
     }
@@ -151,7 +191,7 @@ export default function App() {
       )}
       <main className="main">
         <Topbar crumbs={crumbs} />
-        <div className="main-scroll">
+        <div className="main-scroll" ref={mainScroll}>
           <ErrorBoundary
             label={`view:${route.route}`}
             resetKeys={[routeKey]}
@@ -169,6 +209,8 @@ export default function App() {
               initialSearch={route.q || route.scope ? { query: route.q, scope: route.scope } : undefined}
             />
           )}
+          {route.route === 'sessions' && <SessionsPage onRoute={navigate} />}
+          {route.route === 'session' && <SessionPage key={route.session} sessionId={route.session} onRoute={navigate} onAction={onAction} />}
           {route.route === 'projects' && <ProjectsPage onRoute={navigate} onAction={onAction} />}
           {route.route === 'project' && <ProjectPage projectId={route.project} onAction={onAction} onRoute={navigate} />}
           {route.route === 'activity' && <ActivityPage onAction={onAction} />}
@@ -183,6 +225,10 @@ export default function App() {
             <TodosPage onAction={onAction} initialScope={route.scope} />
           )}
           {route.route === 'trash' && <TrashPage />}
+          {route.route === 'settings' && <SettingsPage theme={theme} onTheme={setTheme} onBack={() => {
+            if (navigation.history.state?.settingsEntry) navigation.history.back();
+            else navigate({ route: 'home' });
+          }} />}
           </ErrorBoundary>
         </div>
       </main>
@@ -193,8 +239,8 @@ export default function App() {
         resetKeys={[modal?.kind ?? null]}
         fallback={(error) => <ModalErrorFallback error={error} onClose={() => setModal(null)} />}
       >
-      {modal?.kind === 'upload' && <UploadModal project={modal.payload} onClose={() => setModal(null)} />}
-      {modal?.kind === 'note-edit' && <NoteEditorModal note={modal.payload} projectId={modal.projectId} initialFolder={modal.folder} onClose={() => setModal(null)} />}
+      {modal?.kind === 'upload' && <UploadModal project={modal.payload} sessionId={modal.sessionId} onClose={() => setModal(null)} />}
+      {modal?.kind === 'note-edit' && <NoteEditorModal note={modal.payload} projectId={modal.projectId} sessionId={modal.sessionId} initialFolder={modal.folder} onClose={() => setModal(null)} />}
       {modal?.kind === 'doc-read' && <DocReaderDrawer doc={modal.payload} onClose={() => setModal(null)} onRoute={navigate} />}
       {modal?.kind === 'todo-detail' && <TodoDetailDrawer key={modal.payload.id} todo={modal.payload} onClose={() => setModal(null)} onAction={onAction} />}
       {modal?.kind === 'bulk-confirm' && (
@@ -211,9 +257,6 @@ export default function App() {
         <RenameTagModal tag={modal.payload} onClose={() => setModal(null)} />
       )}
       {modal?.kind === 'new-project' && <ProjectModal onClose={() => setModal(null)} />}
-      {modal?.kind === 'settings' && (
-        <SettingsModal theme={theme} onTheme={setTheme} onClose={() => setModal(null)} />
-      )}
       {/* Search is inline on HomePage; no modal here. */}
       {modal?.kind === 'personal-todos' && (
         <TodoListDrawer initialSort={modal.sort} initialTagFilter={modal.tagFilter} onClose={() => setModal(null)} onAction={onAction} />

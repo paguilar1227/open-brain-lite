@@ -1,3 +1,4 @@
+import { onHostEvent } from '../lib/host';
 import { Fragment, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { Icons } from './Icons';
 import { cls } from '../lib/util';
@@ -184,8 +185,8 @@ export function Modal({
       e.stopImmediatePropagation();
       onClose();
     };
-    document.addEventListener('keydown', onKey, true);
-    return () => document.removeEventListener('keydown', onKey, true);
+    const stopKey = onHostEvent('keydown', onKey, true);
+    return () => stopKey();
   }, [onClose]);
   const downOnBackdropRef = useRef(false);
   return (
@@ -234,8 +235,8 @@ export function Drawer({
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
     };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
+    const stopKey = onHostEvent('keydown', onKey);
+    return () => stopKey();
   }, [onClose]);
   // Same mousedown/click-target check as Modal: only dismiss when both
   // ends of the press landed on the backdrop, so a text-selection drag

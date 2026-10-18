@@ -125,7 +125,7 @@ describe('MCP server', () => {
     expect(result.body.result.capabilities.tools).toBeDefined();
   });
 
-  it('lists all 25 tools on tools/list', async () => {
+  it('lists workspace tools on tools/list without duplicate names', async () => {
     const deps = mockDeps();
 
     // MCP requires initialize before other calls; use stateful session flow
@@ -187,8 +187,13 @@ describe('MCP server', () => {
       'reprocess',
       'replace',
       'save_from_url',
+      'delete_session', 'delete', 'delete_comment', 'pin', 'unpin',
+      'bulk_content', 'bulk_todos', 'reorder_todos', 'upload_file', 'replace_file',
+      'get_content_status', 'delete_tag', 'get_stats', 'list_project_counts',
+      'get_settings', 'update_settings', 'list_models', 'start_provider_login',
+      'provider_login_status', 'list_notifications',
     ]));
-    expect(toolNames).toHaveLength(25);
+    expect(new Set(toolNames).size).toBe(toolNames.length);
   });
 
   it('calls create_project and returns the created project', async () => {

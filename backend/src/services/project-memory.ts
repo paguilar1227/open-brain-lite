@@ -35,9 +35,9 @@ export async function startProjectConsolidation(deps: ServiceDeps, projectId: st
 
 // Stage the source inside its owner's transaction. Model work starts only after
 // commit, so a crash can leave a recoverable pending note, never a missing one.
-async function stageMemoryNote(db: Pick<DbClient, 'query'>, projectId: string, title: string, content: string, folder: string) {
+async function stageMemoryNote(db: Pick<DbClient, 'query'>, projectId: string | null, title: string, content: string, folder: string, sessionId?: string) {
   const trace = newTrace();
-  const input = { type: 'note' as const, title, content, projectIds: [projectId], folder };
+  const input = { type: 'note' as const, title, content, projectIds: projectId ? [projectId] : [], sessionId, folder };
   const note = await insertContentItem(db, {
     ...input, titleSource: 'user', tags: [], blobUrl: null, mimeType: null,
     fileHash: null, embedding: null, metadata: { ingest_trace: trace },
@@ -66,17 +66,17 @@ export async function getProjectContext(deps: ServiceDeps, projectId: string) {
     consolidation: job ? { ...job } : null };
 }
 
-export async function saveProjectSession(deps: ServiceDeps, projectId: string, session: {
+export async function saveProjectSession(deps: ServiceDeps, projectId: string | null, session: {
   session_key: string; summary: string; decisions: string[]; next_steps: string[];
 }, options: { waitForIndex?: boolean } = {}) {
-  await getProjectContext(deps, projectId);
+  if (projectId) await getProjectContext(deps, projectId);
   // Idempotence is enforced by the DB, including concurrent callers.
   const result = await deps.db.transaction(async tx => {
     const saved = await tx.query(`INSERT INTO project_sessions(project_id, session_key, summary, decisions, next_steps)
-      VALUES ($1,$2,$3,$4,$5) ON CONFLICT(project_id, session_key) DO NOTHING RETURNING *`,
+      VALUES ($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING RETURNING *`,
       [projectId, session.session_key, session.summary, session.decisions, session.next_steps]);
     const row = saved.rows[0] ?? (await tx.query(
-      'SELECT * FROM project_sessions WHERE project_id = $1 AND session_key = $2 FOR UPDATE',
+      'SELECT * FROM project_sessions WHERE project_id IS NOT DISTINCT FROM $1::uuid AND session_key = $2 FOR UPDATE',
       [projectId, session.session_key],
     )).rows[0];
     if (row.note_id) return { row, note: null };
@@ -84,7 +84,7 @@ export async function saveProjectSession(deps: ServiceDeps, projectId: string, s
     // Use the original facts when an idempotent retry supplies a different body.
     const body = [row.summary, '## Decisions', ...row.decisions.map((x: string) => `- ${x}`),
       '## Next steps', ...row.next_steps.map((x: string) => `- ${x}`)].join('\n\n');
-    const note = await stageMemoryNote(tx, projectId, `Session ${row.session_key}`, body, 'system/sessions');
+    const note = await stageMemoryNote(tx, projectId, `Session ${row.session_key}`, body, 'system/sessions', row.id);
     await tx.query('UPDATE project_sessions SET note_id = $1 WHERE id = $2', [note.id, row.id]);
     return { row: { ...row, note_id: note.id }, note };
   });

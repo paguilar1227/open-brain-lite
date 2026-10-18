@@ -11,7 +11,7 @@ import { fileURLToPath } from 'url';
 import { createDbClient } from './db/client.js';
 import { loadConfig } from './config.js';
 import { createApp } from './app.js';
-import { SubscriptionLLMProvider } from './providers/subscription.js';
+import { SubscriptionLLMProvider, trySelectCopilotDefault } from './providers/subscription.js';
 import { LocalFileStorage } from './storage/local.js';
 import { OllamaEmbeddingProvider, OllamaLLMProvider } from './providers/ollama.js';
 import { createBlobStorage } from './storage/blob.js';
@@ -238,6 +238,12 @@ async function runMigrations(): Promise<void> {
     }
 
     await deps.db.pool.query(readFileSync(migration('011_project_memory.sql'), 'utf8'));
+    const timeline = await deps.db.pool.query("SELECT to_regclass('public.project_timeline_events') AS table_name");
+    if (!timeline.rows[0].table_name) {
+      await deps.db.pool.query(readFileSync(migration('012_project_timeline.sql'), 'utf8'));
+    }
+    const sessions = await deps.db.pool.query("SELECT 1 FROM information_schema.columns WHERE table_name='content_items' AND column_name='session_id'");
+    if (!sessions.rows.length) await deps.db.pool.query(readFileSync(migration('013_session_workspaces.sql'), 'utf8'));
     console.log('All migrations up to date.');
   } catch (err) {
     console.error('Migration failed:', err);
@@ -247,7 +253,8 @@ async function runMigrations(): Promise<void> {
 
 const app = createApp(deps);
 
-runMigrations().then(() => {
+runMigrations().then(async () => {
+  await trySelectCopilotDefault(config);
   serve({ fetch: app.fetch, port: config.port }, (info) => {
     console.log(`Open Brain Lite listening on port ${info.port}`);
     void recoverInterruptedIngests(deps).catch(err => console.error('[recovery]', err));

@@ -55,6 +55,7 @@ export async function createTodo(
   deps: ServiceDeps,
   input: {
     content: string;
+    sessionId?: string | null;
     projectId?: string | null;
     section?: string | null;
     parentId?: string | null;
@@ -70,6 +71,7 @@ export async function createTodo(
   const todo: TodoInsert = {
     content: input.content,
     projectId: input.projectId ?? null,
+    sessionId: input.sessionId,
     section: input.section ?? null,
     parentId: input.parentId ?? null,
     priority: input.priority ?? null,
@@ -122,6 +124,7 @@ export async function updateTodo(
   id: string,
   patch: {
     content?: string;
+    sessionId?: string | null;
     projectId?: string | null;
     section?: string | null;
     parentId?: string | null;

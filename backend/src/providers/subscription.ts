@@ -8,6 +8,51 @@ import { extractJson } from './json-utils.js';
 import type { Config } from '../config.js';
 import { OllamaLLMProvider } from './ollama.js';
 import { providerEnvironment } from './environment.js';
+import { DEFAULT_COPILOT_MODEL } from '../config.js';
+import type { ModelCatalog } from './model-catalog.js';
+
+function copilotClient(config: Config) {
+  return new CopilotClient({ mode: 'empty', connection: RuntimeConnection.forStdio(), env: providerEnvironment(config.authDir, 'copilot'), baseDirectory: join(config.authDir, 'copilot'), workingDirectory: join(config.authDir, 'workspace') });
+}
+
+export async function discoverCopilotModels(config: Config): Promise<ModelCatalog> {
+  const client = copilotClient(config);
+  try {
+    await mkdir(join(config.authDir, 'workspace'), { recursive: true });
+    await client.start();
+    if (!(await client.getAuthStatus()).isAuthenticated) return { status: 'sign_in_required', models: [], message: 'Sign in with GitHub Copilot to see your available models.' };
+    const models = (await client.listModels()).filter(model => !model.policy || model.policy.state === 'enabled')
+      .map(model => ({ id: model.id, name: model.name || model.id }));
+    return { status: 'available', models, message: 'Models available through your GitHub Copilot account.' };
+  } finally { await client.stop().catch(() => undefined); }
+}
+
+// Only select a default when there is no explicit saved/environment choice.
+// A failed discovery leaves the local default intact; inference never falls back.
+export async function trySelectCopilotDefault(config: Config): Promise<boolean> {
+  if (!config.autoSelectCopilot || config.storageProvider !== 'local') return false;
+  let client: CopilotClient | undefined;
+  try {
+    client = copilotClient(config);
+    await mkdir(join(config.authDir, 'workspace'), { recursive: true });
+    await client.start();
+    if (!(await client.getAuthStatus()).isAuthenticated) return false;
+    const models = await client.listModels();
+    const model = models.find(model => model.id === DEFAULT_COPILOT_MODEL);
+    if (!model || (model.policy && model.policy.state !== 'enabled')) return false;
+    // A user may have saved a choice while discovery was in flight.
+    if (!config.autoSelectCopilot) return false;
+    config.llmProvider = 'copilot';
+    config.copilotModel = DEFAULT_COPILOT_MODEL;
+    console.info(`[providers] Default: Copilot / ${DEFAULT_COPILOT_MODEL}`);
+    return true;
+  } catch {
+    console.warn('[providers] Copilot availability check failed; keeping the configured provider.');
+    return false;
+  } finally {
+    await client?.stop().catch(() => undefined);
+  }
+}
 
 function promptFor(messages: LLMMessage[], options: LLMOptions) {
   return [options.systemPrompt ?? '', options.responseFormat === 'json' ? 'Return valid JSON only.' : '',
@@ -25,7 +70,7 @@ export class SubscriptionLLMProvider implements LLMProvider {
     let content: string;
     let usage = { input: 0, output: 0, total: 0 };
     if (this.config.llmProvider === 'copilot') {
-      const client = new CopilotClient({ mode: 'empty', connection: RuntimeConnection.forStdio(), env: providerEnvironment(this.config.authDir, 'copilot'), baseDirectory: join(this.config.authDir, 'copilot'), workingDirectory });
+      const client = copilotClient(this.config);
       await client.start();
       try {
         if (!(await client.getAuthStatus()).isAuthenticated) throw new Error('Sign in to Copilot in Settings first.');

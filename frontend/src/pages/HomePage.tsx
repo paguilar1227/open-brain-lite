@@ -1,3 +1,4 @@
+import { embeddedHost, navigation } from '../lib/host';
 // Home — personal-scope landing page. Absorbs what used to be the Inbox
 // (project-less todos), adds project-less notes alongside it, and exposes
 // search at the top with a Personal/All-projects scope toggle.
@@ -133,7 +134,7 @@ export function HomePage({ onRoute, onAction, initialSearch }: Props) {
   const [scope, setScope] = useState<SearchScope>(() => {
     if (initialSearch?.scope) return initialSearch.scope;
     if (typeof window === 'undefined') return 'personal';
-    const urlScope = new URLSearchParams(window.location.search).get('scope');
+    const urlScope = new URLSearchParams(navigation.location.search).get('scope');
     return urlScope ?? 'personal';
   });
   const scopeProjectId = scopeToProjectId(scope);
@@ -144,7 +145,7 @@ export function HomePage({ onRoute, onAction, initialSearch }: Props) {
   const [tagFilter, setTagFilterState] = useState<TagFilter>(() =>
     typeof window === 'undefined'
       ? EMPTY_FILTER
-      : parseTagFilter(new URLSearchParams(window.location.search)),
+      : parseTagFilter(new URLSearchParams(navigation.location.search)),
   );
   // setTagFilter is the public mutator. Tag-array changes route THROUGH
   // the universal search query (so the search input and chip row stay
@@ -171,7 +172,7 @@ export function HomePage({ onRoute, onAction, initialSearch }: Props) {
       setTagFilterState((prev) => ({ ...prev, mode: next.mode }));
     }
     if (typeof window === 'undefined') return;
-    const url = new URL(window.location.href);
+    const url = new URL(navigation.location.href);
     const out = serializeTagFilter(next);
     const tagValue = out.get('tag') ?? '';
     if (tagValue.length > 0) url.searchParams.set('tag', tagValue);
@@ -179,7 +180,7 @@ export function HomePage({ onRoute, onAction, initialSearch }: Props) {
     const modeValue = out.get('mode') ?? '';
     if (modeValue.length > 0) url.searchParams.set('mode', modeValue);
     else url.searchParams.delete('mode');
-    window.history.replaceState(null, '', url.toString());
+    navigation.history.replaceState(null, '', url.toString());
   };
 
   const queries = useQueries({
@@ -390,7 +391,7 @@ export function HomePage({ onRoute, onAction, initialSearch }: Props) {
     //   4. Empty
     if (initialSearch?.query) return initialSearch.query;
     if (typeof window === 'undefined') return '';
-    const params = new URLSearchParams(window.location.search);
+    const params = new URLSearchParams(navigation.location.search);
     const urlQ = params.get('q');
     if (urlQ) return urlQ;
     const urlFilter = parseTagFilter(params);
@@ -405,12 +406,12 @@ export function HomePage({ onRoute, onAction, initialSearch }: Props) {
   // it pre-dates the replaceState chain). Clears params when empty.
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const url = new URL(window.location.href);
+    const url = new URL(navigation.location.href);
     if (query.trim().length > 0) url.searchParams.set('q', query);
     else url.searchParams.delete('q');
     if (scope !== 'personal') url.searchParams.set('scope', scope);
     else url.searchParams.delete('scope');
-    window.history.replaceState(null, '', url.toString());
+    navigation.history.replaceState(null, '', url.toString());
   }, [query, scope]);
 
 
@@ -649,7 +650,7 @@ export function HomePage({ onRoute, onAction, initialSearch }: Props) {
             // ever touching Tab. The results region defines its own
             // ↑/↓/Enter handler from there (see SearchResultsList).
             onArrowDownExit={() => {
-              const first = document.querySelector<HTMLButtonElement>(
+              const first = (embeddedHost()?.element.shadowRoot ?? document).querySelector<HTMLButtonElement>(
                 '.home-search-results .search-hit-title',
               );
               first?.focus();

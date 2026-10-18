@@ -4,6 +4,7 @@ import { classifyQueryDepth, type QueryDepth } from './query-depth.js';
 import { withSpan } from '../observability.js';
 
 export interface RagOptions {
+  sessionId?: string;
   projectId?: string;
   tags?: string[];
   maxChunks?: number;
@@ -116,7 +117,7 @@ async function ragQueryImpl(
 
   // Retrieve relevant chunks. Graph expansion uses query entities if present.
   const { hits, timings: searchTimings } = await searchWithTimings(deps, question, {
-    projectId: opts.projectId,
+    projectId: opts.projectId, sessionId: opts.sessionId,
     entityTypes: opts.entityTypes,
     tags: opts.tags,
     limit: maxChunks,
