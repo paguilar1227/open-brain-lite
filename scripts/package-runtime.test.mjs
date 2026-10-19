@@ -1,0 +1,24 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { createHash } from 'node:crypto';
+test('publishes a self-contained runtime with matching revision and checksum', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'brain-release-'));
+  execFileSync(process.execPath, ['scripts/package-runtime.mjs', directory]);
+  const manifest = JSON.parse(readFileSync(join(directory, 'open-brain-runtime.json'), 'utf8'));
+  const runtime = JSON.parse(readFileSync(join(directory, 'source/runtime.json'), 'utf8'));
+  assert.equal(manifest.apiVersion, 1);
+  assert.equal(manifest.revision, runtime.revision);
+  assert.equal(manifest.version, runtime.version);
+  const archive = readFileSync(join(directory, manifest.archive));
+  assert.equal(manifest.sha256, createHash('sha256').update(archive).digest('hex'));
+  assert.equal(manifest.bytes, archive.length);
+  const files = execFileSync('tar', ['-tzf', join(directory, manifest.archive)], { encoding: 'utf8' });
+  assert.match(files, /runtime.json/);
+  assert.match(files, /frontend\/src/);
+  assert.match(files, /migrations\/013_session_workspaces.sql/);
+  assert.doesNotMatch(files, /(?:^|\/)\.env(?:\n|$)|node_modules/);
+});

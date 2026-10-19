@@ -106,3 +106,9 @@ MCP clients use `list_sessions`, `create_session`, `get_session_context`, `updat
 The agent interface also supports file upload/download/replacement, pins, all list filters, todo ordering and comments, bulk operations, tag maintenance, inventory, due reminders, and provider/model settings and device login. Permanent deletion requires explicit confirmation arguments (the current session name or exact record IDs); archive/restore remains available for reversible removal. Settings and device-login state are shared with the UI. Browser-local theme and browser notification permission remain in the browser. `backend/tests/integration/mcp-workspace-parity.test.ts` checks every server-backed UI route has a tool and exercises workflows through the real HTTP MCP transport with an isolated database and mock inference.
 
 Session workspaces require migration `013_session_workspaces.sql`, after timeline migration `012_project_timeline.sql`. Back up and approve these migrations before upgrading an existing installation.
+
+## Shared runtime releases
+
+The web app, plugin, and CopilotBot consume the same backend and UI. To publish a stable runtime, update the root package version and lockfile, then push its matching `vX.Y.Z` tag. The release workflow builds and tests the project and publishes `open-brain-runtime.tar.gz` with `open-brain-runtime.json` (source revision, API compatibility version, size, and SHA-256). Published versions are immutable; fixes get a new version.
+
+CopilotBot checks these stable releases from its Open Brain panel. It backs up its managed database and files before installation, verifies the updated API and UI, and restores the previous runtime and snapshot if verification fails. Remote or independently managed services are updated by their operator.

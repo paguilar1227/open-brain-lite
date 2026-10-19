@@ -1,0 +1,42 @@
+name: Publish Open Brain runtime
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: open-brain-release-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run build:all
+      - run: npm exec --workspace=open-brain-backend -- vitest run --maxWorkers=1
+      - run: npm run test:frontend
+      - run: node --test scripts/package-runtime.test.mjs
+      - run: node scripts/package-runtime.mjs scratch/release
+      - name: Publish immutable runtime assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(node -p "require('./package.json').version")
+          tag="v$version"
+          test "$GITHUB_REF_NAME" = "$tag"
+          if gh release view "$tag" --json isDraft --jq '.isDraft' > scratch/is-draft; then
+            if test "$(cat scratch/is-draft)" = false; then
+              echo "This version is already published; preserving its original assets."
+              exit 0
+            fi
+          else
+            gh release create "$tag" --draft --title "Open Brain Lite $version" --notes "Versioned shared runtime for Open Brain Lite and CopilotBot. Includes the shared UI, backend, migrations, and checksum manifest."
+          fi
+          gh release upload "$tag" scratch/release/open-brain-runtime.tar.gz scratch/release/open-brain-runtime.json --clobber
+          gh release edit "$tag" --draft=false --latest
