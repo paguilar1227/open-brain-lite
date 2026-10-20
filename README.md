@@ -112,3 +112,7 @@ Session workspaces require migration `013_session_workspaces.sql`, after timelin
 The web app, plugin, and CopilotBot consume the same backend and UI. To publish a stable runtime, update the root package version and lockfile, then push its matching `vX.Y.Z` tag. The release workflow builds and tests the project and publishes `open-brain-runtime.tar.gz` with `open-brain-runtime.json` (source revision, API compatibility version, size, and SHA-256). Published versions are immutable; fixes get a new version.
 
 CopilotBot checks these stable releases from its Open Brain panel. It backs up its managed database and files before installation, verifies the updated API and UI, and restores the previous runtime and snapshot if verification fails. Remote or independently managed services are updated by their operator.
+
+### Independently installed CopilotBot plugin
+
+Each Open Brain release owns its CopilotBot extension under `plugin/copilotbot` and ships it with the shared runtime. CopilotBot installs this package from the Open Brain release feed; it does not bundle or pin the UI/backend. Compatible plugin and runtime updates do not require a new desktop version. The extension uses plugin API 1 and the runtime uses service API 1. Breaking either contract requires an explicit compatible host update; incompatible packages are rejected before installation.

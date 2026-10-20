@@ -8,3 +8,8 @@ const paths = ['package.json','package-lock.json','Dockerfile','Dockerfile.ollam
 for (const path of paths) if (existsSync(join(root, path))) cpSync(join(root, path), join(destination, path), { recursive: true, filter: file => !file.split('/').some(segment => ['node_modules','.env','dist'].includes(segment)) });
 writeFileSync(join(destination, 'runtime.json'), JSON.stringify({ apiVersion: 1, source: 'https://github.com/paguilar1227/open-brain-lite', revision: execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim(), version: JSON.parse(readFileSync(join(root,'package.json'),'utf8')).version }));
 console.log(destination);
+
+const pluginFile = join(destination, 'plugin/copilotbot/plugin.json');
+const plugin = JSON.parse(readFileSync(pluginFile, 'utf8'));
+plugin.version = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version;
+writeFileSync(pluginFile, JSON.stringify(plugin, null, 2) + '\n');

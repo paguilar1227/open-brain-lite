@@ -10,6 +10,10 @@ test('publishes a self-contained runtime with matching revision and checksum', (
   execFileSync(process.execPath, ['scripts/package-runtime.mjs', directory]);
   const manifest = JSON.parse(readFileSync(join(directory, 'open-brain-runtime.json'), 'utf8'));
   const runtime = JSON.parse(readFileSync(join(directory, 'source/runtime.json'), 'utf8'));
+  const plugin = JSON.parse(readFileSync(join(directory, 'source/plugin/copilotbot/plugin.json'), 'utf8'));
+  assert.equal(plugin.version, runtime.version);
+  assert.equal(plugin.apiVersion, 1);
+  assert.equal(plugin.pages[0].webApp.module, 'embedded.js');
   assert.equal(manifest.apiVersion, 1);
   assert.equal(manifest.revision, runtime.revision);
   assert.equal(manifest.version, runtime.version);

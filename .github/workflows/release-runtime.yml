@@ -1,4 +1,4 @@
-name: Publish Open Brain runtime
+name: Publish Open Brain plugin and runtime
 on:
   push:
     tags: ['v*']
@@ -36,7 +36,7 @@ jobs:
               exit 0
             fi
           else
-            gh release create "$tag" --draft --title "Open Brain Lite $version" --notes "Versioned shared runtime for Open Brain Lite and CopilotBot. Includes the shared UI, backend, migrations, and checksum manifest."
+            gh release create "$tag" --draft --title "Open Brain Lite $version" --notes "Independently installable Open Brain Lite plugin and runtime. Includes the shared UI, backend, migrations, CopilotBot extension and checksum manifest. No desktop release required."
           fi
           gh release upload "$tag" scratch/release/open-brain-runtime.tar.gz scratch/release/open-brain-runtime.json --clobber
           gh release edit "$tag" --draft=false --latest
